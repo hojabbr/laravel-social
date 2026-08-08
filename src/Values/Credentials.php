@@ -42,6 +42,9 @@ final readonly class Credentials
             return null;
         }
 
-        return (int) floor($this->expiresAt->diffInDays(now(), absolute: false));
+        // now() FIRST: `$expiresAt->diffInDays(now())` measures the other
+        // direction and reports a token with sixty days left as -60, which reads
+        // to every caller as "expired two months ago".
+        return (int) floor(now()->diffInDays($this->expiresAt, absolute: false));
     }
 }
