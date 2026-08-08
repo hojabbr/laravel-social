@@ -83,7 +83,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
 
     public function rateProfile(): RateProfile
     {
-        // No per-request pacing: the constraint is a 25-posts-per-24h quota, not
+        // No per-request pacing: the constraint is a daily publishing quota, not
         // a messages-per-minute rate. publishingLimit() is how a caller reads it.
         return new RateProfile(0);
     }
@@ -410,7 +410,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
     }
 
     /**
-     * The 25-posts-per-24h publishing quota, read BEFORE a burst so a backfill
+     * The daily publishing quota, read BEFORE a burst so a backfill
      * can stop rather than collect rejections.
      */
     public function publishingLimit(Account $account): Metrics

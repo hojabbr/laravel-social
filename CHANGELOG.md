@@ -6,6 +6,18 @@ This project follows [Semantic Versioning](https://semver.org). While the versio
 is below `1.0.0`, a breaking change lands in a new MINOR (`0.2.0`), not a patch —
 so pin with `^0.1.0` and read this file before moving between minors.
 
+## 0.2.1 — 2026-08-08
+
+### Fixed
+
+- Two comments in `InstagramDriver` stated the publishing quota as
+  25 posts per 24 hours, which is Meta's documented figure. Measured against two
+  live Business accounts, `content_publishing_limit` answers `quota: 100`. The code
+  always read the real number, so nothing behaved differently — but a comment that
+  states a limit is read as the limit, and a caller sizing a backfill against 25
+  would have left three quarters of its allowance unused. The comments now name the
+  endpoint instead of a number.
+
 ## 0.2.0 — 2026-08-08
 
 A MINOR rather than a patch because two public methods are gone. Nothing in the
