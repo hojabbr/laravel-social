@@ -6,6 +6,32 @@ This project follows [Semantic Versioning](https://semver.org). While the versio
 is below `1.0.0`, a breaking change lands in a new MINOR (`0.2.0`), not a patch —
 so pin with `^0.1.0` and read this file before moving between minors.
 
+## 0.5.0 — 2026-08-08
+
+A MINOR for one added optional contract. Nothing is renamed, moved or removed.
+
+### Added
+
+- `Contracts\SupportsCoverUpdate` — replace the cover of an object that is
+  ALREADY published, addressed by account and external id. `YouTubeDriver`
+  implements it over `thumbnails.set`; Instagram does not, and that absence is
+  the answer: a Reel's cover is fixed when its container is created and no
+  endpoint changes it afterwards, so a caller checking `instanceof` is told the
+  post cannot be repaired in place rather than believing a no-op worked.
+
+  A cover outlives the publish that carried it. A re-render, a design change, or
+  — the case that produced this — a cover that turned out to be the wrong SHAPE
+  for the network's slot all leave a live post wearing an image the app has since
+  replaced, and the only alternative was deleting and re-uploading the video to
+  change a picture.
+
+  `YouTubeDriver::attachThumbnail()` and `updateCover()` now share one private
+  `putThumbnail()`, so the 2MB check, the mime derivation and the logging cannot
+  drift into two versions. Neither throws: the publish path is best-effort by
+  design (the video is already live), and the update path returns false like the
+  other optional contracts, so a caller walking several posts continues past one
+  failure.
+
 ## 0.4.0 — 2026-08-08
 
 A MINOR for one added capability. Nothing is renamed, moved or removed, and the

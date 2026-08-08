@@ -4,6 +4,7 @@ namespace Hojabbr\Social\Drivers\YouTube;
 
 use Hojabbr\Social\Contracts\ProvidesAnalytics;
 use Hojabbr\Social\Contracts\RefreshesTokens;
+use Hojabbr\Social\Contracts\SupportsCoverUpdate;
 use Hojabbr\Social\Contracts\SupportsDeletion;
 use Hojabbr\Social\Drivers\BaseDriver;
 use Hojabbr\Social\Enums\Placement;
@@ -48,7 +49,7 @@ use Illuminate\Support\Facades\Log;
  *   thumbnails.set                → never fails the publish. The video is live;
  *                                   a missing custom thumbnail is cosmetic.
  */
-class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTokens, SupportsDeletion
+class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTokens, SupportsCoverUpdate, SupportsDeletion
 {
     /**
      * What the OAuth grant has to cover: upload, read back what we uploaded,
@@ -293,36 +294,78 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
     {
         $thumbnail = $request->firstMedia()?->thumbnailPath;
 
-        if ($thumbnail === null || ! is_file($thumbnail)) {
-            return;
+        if ($thumbnail !== null) {
+            $this->putThumbnail($videoId, $thumbnail, $token);
+        }
+    }
+
+    /**
+     * Replace the cover of a video that is ALREADY live.
+     *
+     * The same call publish() makes, addressed by account instead of by request,
+     * because a cover outlives the publish that carried it: a re-render, a design
+     * change, or a cover that was the wrong SHAPE for this slot all leave a live
+     * post wearing an image the app has replaced. The alternative is deleting and
+     * re-uploading a video to change a picture.
+     */
+    public function updateCover(Account $account, int|string $externalId, string $imagePath): bool
+    {
+        $token = $this->accessToken($account);
+
+        if ($token === null) {
+            return false;
         }
 
-        $size = filesize($thumbnail);
+        return $this->putThumbnail((string) $externalId, $imagePath, $token);
+    }
+
+    /**
+     * `thumbnails.set` for one video, with the two refusals this call actually
+     * has: a file that is not there, and one over the 2MB cap.
+     *
+     * Shared by the publish path and {@see updateCover()} so the size check, the
+     * mime derivation and the logging cannot drift into two versions. Never
+     * throws: the publish path is best-effort by design (the video is already
+     * live, and turning it into a failed publish would release the claim and
+     * re-upload the film), and the update path reports the same false the rest of
+     * the optional contracts report.
+     */
+    private function putThumbnail(string $videoId, string $path, string $token): bool
+    {
+        if (! is_file($path)) {
+            return false;
+        }
+
+        $size = filesize($path);
 
         if ($size === false || $size > self::MAX_THUMBNAIL_BYTES) {
             Log::warning('Skipped a YouTube thumbnail over the 2MB limit.', ['video' => $videoId, 'bytes' => $size]);
 
-            return;
+            return false;
         }
 
         // Derived, not assumed: thumbnails.set takes a raw binary body, so the
         // Content-Type is the ONLY thing telling YouTube what the bytes are. A
         // hardcoded 'image/jpeg' over a PNG is a refusal the caller cannot see,
-        // because this step is best-effort and swallows its own failure.
-        $mimeType = mime_content_type($thumbnail) ?: 'image/jpeg';
+        // because the publish path swallows its own failure.
+        $mimeType = mime_content_type($path) ?: 'image/jpeg';
 
         try {
-            $response = $this->client()->setThumbnail($videoId, $thumbnail, $mimeType, $token);
-
-            if (! $response->successful()) {
-                Log::warning('YouTube refused the custom thumbnail.', [
-                    'video' => $videoId,
-                    'error' => YouTubeClient::errorOf($response),
-                ]);
-            }
+            $response = $this->client()->setThumbnail($videoId, $path, $mimeType, $token);
         } catch (ConnectionException $exception) {
             Log::warning('Could not set the YouTube thumbnail.', ['video' => $videoId, 'error' => $exception->getMessage()]);
+
+            return false;
         }
+
+        if (! $response->successful()) {
+            Log::warning('YouTube refused the custom thumbnail.', [
+                'video' => $videoId,
+                'error' => YouTubeClient::errorOf($response),
+            ]);
+        }
+
+        return $response->successful();
     }
 
     /**

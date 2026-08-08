@@ -107,3 +107,46 @@ test('a deletion puts the video id in the query string, where the API reads it',
         && str_contains($request->url(), 'youtube/v3/videos?id=vid-123')
         && $request->body() === '');
 });
+
+test('a cover update posts the image to thumbnails.set for the given video', function (): void {
+    // The repair path for a live post: the same call publish() makes, addressed
+    // by account and video id instead of by a PublishRequest. The body is raw
+    // binary and the mime type is the only thing naming it.
+    $path = tempnam(sys_get_temp_dir(), 'cover').'.png';
+    file_put_contents($path, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+
+    Http::preventStrayRequests();
+    Http::fake([
+        'oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.access', 'expires_in' => 3600]),
+        'www.googleapis.com/upload/youtube/v3/thumbnails/set*' => Http::response(['items' => []], 200),
+    ]);
+
+    $driver = youtube(['fa' => ['id' => 'UC-fa', 'refresh_token' => 'grant-fa']]);
+
+    expect($driver->updateCover($driver->account('fa'), 'vid-123', $path))->toBeTrue();
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && str_contains($request->url(), 'thumbnails/set?videoId=vid-123')
+        && $request->header('Content-Type') === ['image/png']);
+
+    unlink($path);
+});
+
+test('a cover update reports false rather than throwing when the file is gone', function (): void {
+    // A caller walking several posts has to be able to continue past one that
+    // cannot be repaired, so a missing file is an answer and not an exception.
+    Http::preventStrayRequests();
+    Http::fake(['oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.access', 'expires_in' => 3600])]);
+
+    $driver = youtube(['fa' => ['id' => 'UC-fa', 'refresh_token' => 'grant-fa']]);
+
+    expect($driver->updateCover($driver->account('fa'), 'vid-123', '/no/such/cover.png'))->toBeFalse();
+});
+
+test('a cover update refuses an account with no grant before it reaches the wire', function (): void {
+    Http::preventStrayRequests();
+
+    $driver = youtube(['fa' => ['id' => 'UC-fa']]);
+
+    expect($driver->updateCover($driver->account('fa'), 'vid-123', '/no/such/cover.png'))->toBeFalse();
+});

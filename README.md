@@ -207,6 +207,7 @@ check with `instanceof` and cannot ask a network for something it does not do.
 | Contract | Implemented by | For |
 | --- | --- | --- |
 | `SupportsDeletion` | Telegram, YouTube | Removing a published object |
+| `SupportsCoverUpdate` | YouTube | Replacing the cover of an already-published object |
 | `SupportsTopics` | Telegram | Creating/renaming/closing forum topics |
 | `ProvidesAnalytics` | Instagram, YouTube | Reading numbers back |
 | `RefreshesTokens` | Instagram, YouTube | Renewing credentials without a human |
@@ -215,7 +216,9 @@ The absences carry meaning. `InstagramDriver` does **not** implement
 `SupportsDeletion`, because `DELETE /{ig-media-id}` answers *"This api only
 supports Instagram API with Facebook login only"* on an Instagram-Login token — so
 a retraction path is forced to surface the permalink for a human instead of
-believing a delete it never made.
+believing a delete it never made. It does not implement `SupportsCoverUpdate`
+either: a Reel's cover is fixed when its container is created, so a post whose
+cover turned out wrong cannot be repaired in place — only replaced.
 
 ```php
 if ($driver instanceof SupportsDeletion) {
