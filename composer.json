@@ -1,7 +1,14 @@
 {
     "name": "hojabbr/laravel-social",
     "description": "Driver-based social publishing and analytics for Laravel: Instagram, YouTube and Telegram behind one three-state publish contract.",
-    "keywords": ["laravel", "social", "instagram", "youtube", "telegram", "publishing"],
+    "keywords": [
+        "laravel",
+        "social",
+        "instagram",
+        "youtube",
+        "telegram",
+        "publishing"
+    ],
     "license": "MIT",
     "homepage": "https://github.com/hojabbr/laravel-social",
     "authors": [
@@ -24,6 +31,8 @@
     },
     "require-dev": {
         "irazasyed/telegram-bot-sdk": "^3.15",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^4.0",
         "spatie/image": "^3.8"
     },
     "suggest": {
@@ -48,8 +57,14 @@
         }
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "scripts": {
+        "test": "vendor/bin/pest"
+    }
 }

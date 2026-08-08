@@ -160,6 +160,10 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
             return PublishResult::rejected('Instagram has no text-only post; a Reel, Story or Feed post needs media.');
         }
 
+        if (($refusal = $this->unacceptableMedia($request)) !== null) {
+            return PublishResult::rejected($refusal);
+        }
+
         foreach ($request->media as $media) {
             if ($media->url === null) {
                 return PublishResult::rejected(

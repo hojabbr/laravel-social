@@ -157,6 +157,10 @@ class TelegramDriver extends BaseDriver implements SupportsDeletion, SupportsTop
             }
         }
 
+        if (($refusal = $this->unacceptableMedia($request)) !== null) {
+            return PublishResult::rejected($refusal);
+        }
+
         $images = array_values(array_filter($request->media, static fn (Media $m): bool => ! $m->isVideo()));
 
         return match (true) {

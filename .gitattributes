@@ -3,5 +3,7 @@
 /.github          export-ignore
 /.gitattributes   export-ignore
 /.editorconfig    export-ignore
+/.gitignore       export-ignore
+/phpunit.xml      export-ignore
 
 * text=auto eol=lf

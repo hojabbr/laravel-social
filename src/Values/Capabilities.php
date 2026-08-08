@@ -2,7 +2,6 @@
 
 namespace Hojabbr\Social\Values;
 
-use Hojabbr\Social\Enums\MediaKind;
 use Hojabbr\Social\Enums\Placement;
 
 /**
@@ -29,6 +28,9 @@ final readonly class Capabilities
      *                              number because the two rarely match, and a
      *                              single "maxBytes" makes a caller's fallback
      *                              ladder (video → photo → text) wrong at one end.
+     *                              Both are read by the caller building the
+     *                              request: it is the one that knows what it can
+     *                              fall back to when a file is too big.
      * @param  bool  $pullsMedia  The network FETCHES the file from a public URL
      *                            instead of taking bytes, so the caller has to
      *                            expose one before it builds the request.
@@ -53,18 +55,5 @@ final readonly class Capabilities
     public function accepts(?string $mimeType): bool
     {
         return $mimeType !== null && in_array(strtolower($mimeType), $this->mimeTypes, true);
-    }
-
-    /**
-     * The text ceiling that applies to a given request shape.
-     */
-    public function textLimit(bool $withMedia): int
-    {
-        return $withMedia ? $this->captionLimit : $this->bodyLimit;
-    }
-
-    public function maxBytesFor(MediaKind $kind): int
-    {
-        return $kind === MediaKind::Video ? $this->maxVideoBytes : $this->maxImageBytes;
     }
 }

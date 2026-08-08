@@ -7,6 +7,7 @@ use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\Exceptions\MissingCredentials;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Destination;
+use Hojabbr\Social\Values\PublishRequest;
 
 /**
  * The config reading and account resolution every driver needs, once.
@@ -103,5 +104,28 @@ abstract class BaseDriver implements Driver
     protected function flag(string $key, bool $default = false): bool
     {
         return array_key_exists($key, $this->config) ? (bool) $this->config[$key] : $default;
+    }
+
+    /**
+     * The first media this network will not take, phrased as the sentence to
+     * reject with — the declared mime list ENFORCED rather than merely published.
+     *
+     * A refusal here beats the same refusal from the network: Instagram accepts
+     * JPEG only, so a PNG that slipped through a conversion step comes back as a
+     * container error minutes later, after the upload, with a message about a
+     * media type the caller never named. An unstated mime type is not refused,
+     * because "I do not know what this file is" is the caller admitting it, and
+     * the network is then the better judge.
+     */
+    protected function unacceptableMedia(PublishRequest $request): ?string
+    {
+        foreach ($request->media as $media) {
+            if ($media->mimeType !== null && ! $this->capabilities()->accepts($media->mimeType)) {
+                return "{$this->label()} does not accept {$media->mimeType}; it takes "
+                    .implode(', ', $this->capabilities()->mimeTypes).'.';
+            }
+        }
+
+        return null;
     }
 }

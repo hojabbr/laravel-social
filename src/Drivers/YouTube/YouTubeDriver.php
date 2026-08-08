@@ -142,6 +142,10 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             return PublishResult::rejected('YouTube uploads BYTES, so the media needs a readable local `path` (a URL is not fetched).');
         }
 
+        if (($refusal = $this->unacceptableMedia($request)) !== null) {
+            return PublishResult::rejected($refusal);
+        }
+
         $bytes = $media->bytes() ?? 0;
 
         if ($bytes < 1) {

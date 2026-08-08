@@ -1,6 +1,5 @@
 <?php
 
-use Hojabbr\Social\Enums\MediaKind;
 use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\Values\Capabilities;
 
@@ -29,14 +28,13 @@ test('mime types match case-insensitively and an unknown type is never accepted'
         ->and(capabilities()->accepts(null))->toBeFalse();
 });
 
-test('the text ceiling depends on whether media is attached', function (): void {
-    expect(capabilities()->textLimit(withMedia: false))->toBe(4096)
-        ->and(capabilities()->textLimit(withMedia: true))->toBe(1024);
-});
-
-test('video and image ceilings are separate numbers', function (): void {
-    // A single "maxBytes" makes a caller's video → photo → text fallback ladder
-    // wrong at one end, which is why these are two fields.
-    expect(capabilities()->maxBytesFor(MediaKind::Video))->toBe(45 * 1024 * 1024)
-        ->and(capabilities()->maxBytesFor(MediaKind::Image))->toBe(10 * 1024 * 1024);
+test('the two text ceilings are separate numbers, and so are the two byte ceilings', function (): void {
+    // A caller attaching media reads captionLimit and one posting text reads
+    // bodyLimit; a single "maxBytes" would make a video → photo → text fallback
+    // ladder wrong at one end. Four declared numbers, read by the caller that
+    // knows which shape it is building.
+    expect(capabilities()->bodyLimit)->toBe(4096)
+        ->and(capabilities()->captionLimit)->toBe(1024)
+        ->and(capabilities()->maxVideoBytes)->toBe(45 * 1024 * 1024)
+        ->and(capabilities()->maxImageBytes)->toBe(10 * 1024 * 1024);
 });
