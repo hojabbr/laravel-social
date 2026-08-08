@@ -1,0 +1,7 @@
+# Keep a `composer require` download to the runtime code only.
+/tests            export-ignore
+/.github          export-ignore
+/.gitattributes   export-ignore
+/.editorconfig    export-ignore
+
+* text=auto eol=lf

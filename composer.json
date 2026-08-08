@@ -1,0 +1,55 @@
+{
+    "name": "hojabbr/laravel-social",
+    "description": "Driver-based social publishing and analytics for Laravel: Instagram, YouTube and Telegram behind one three-state publish contract.",
+    "keywords": ["laravel", "social", "instagram", "youtube", "telegram", "publishing"],
+    "license": "MIT",
+    "homepage": "https://github.com/hojabbr/laravel-social",
+    "authors": [
+        {
+            "name": "Hossein Jabbari",
+            "homepage": "https://github.com/hojabbr",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/hojabbr/laravel-social/issues",
+        "source": "https://github.com/hojabbr/laravel-social"
+    },
+    "require": {
+        "php": "^8.5",
+        "illuminate/contracts": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/process": "^13.0",
+        "illuminate/support": "^13.0"
+    },
+    "require-dev": {
+        "irazasyed/telegram-bot-sdk": "^3.15",
+        "spatie/image": "^3.8"
+    },
+    "suggest": {
+        "irazasyed/telegram-bot-sdk": "Required by the Telegram driver (^3.15).",
+        "spatie/image": "Lets the Telegram driver build a spec-compliant video thumbnail (^3.8); without it Telegram generates its own."
+    },
+    "autoload": {
+        "psr-4": {
+            "Hojabbr\\Social\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Hojabbr\\Social\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Hojabbr\\Social\\SocialServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
