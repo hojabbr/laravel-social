@@ -101,6 +101,13 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             mimeTypes: ['video/mp4', 'video/quicktime', 'video/webm'],
             maxVideoBytes: self::MAX_VIDEO_BYTES,
             maxImageBytes: self::MAX_THUMBNAIL_BYTES,
+            // The thumbnail slot is 16:9 for EVERY video, a Short included.
+            // Shorts additionally keep a second, 9:16 thumbnail family
+            // (`oar1`/`oar2`/`oar3`) that the channel and Shorts tabs render and
+            // that thumbnails.set cannot write — it is auto-picked from film
+            // frames. So this number is the shape of the only slot we control,
+            // not the shape of every surface the video appears on.
+            thumbnailAspect: 16 / 9,
         );
     }
 

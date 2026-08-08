@@ -28,6 +28,29 @@ test('mime types match case-insensitively and an unknown type is never accepted'
         ->and(capabilities()->accepts(null))->toBeFalse();
 });
 
+test('a thumbnail slot with no fixed shape declares null, not a guess', function (): void {
+    // Null is the honest default: most networks show the thumbnail in the post's
+    // own shape. A driver that invented 1.0 here would send every caller
+    // hunting for a square asset that no network asked for.
+    expect(capabilities()->thumbnailAspect)->toBeNull();
+});
+
+test('YouTube declares the 16:9 slot it silently pads a portrait cover into', function (): void {
+    $youtube = new Hojabbr\Social\Drivers\YouTube\YouTubeDriver([], [], 'youtube');
+
+    expect($youtube->capabilities()->thumbnailAspect)->toBe(16 / 9);
+});
+
+test('a network that fetches the file declares no thumbnail shape', function (): void {
+    // Instagram renders a Reel cover in the Reel's own 9:16 container, so there
+    // is nothing to declare — and declaring one would make the caller convert an
+    // asset that was already the right shape.
+    $instagram = new Hojabbr\Social\Drivers\Instagram\InstagramDriver([], [], 'instagram');
+
+    expect($instagram->capabilities()->thumbnailAspect)->toBeNull()
+        ->and($instagram->capabilities()->pullsMedia)->toBeTrue();
+});
+
 test('the two text ceilings are separate numbers, and so are the two byte ceilings', function (): void {
     // A caller attaching media reads captionLimit and one posting text reads
     // bodyLimit; a single "maxBytes" would make a video → photo → text fallback

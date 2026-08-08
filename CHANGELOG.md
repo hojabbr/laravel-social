@@ -6,6 +6,33 @@ This project follows [Semantic Versioning](https://semver.org). While the versio
 is below `1.0.0`, a breaking change lands in a new MINOR (`0.2.0`), not a patch —
 so pin with `^0.1.0` and read this file before moving between minors.
 
+## 0.4.0 — 2026-08-08
+
+A MINOR for one added capability. Nothing is renamed, moved or removed, and the
+new field defaults to null, so an existing consumer needs no change.
+
+### Added
+
+- `Capabilities::$thumbnailAspect` — the width/height a network's thumbnail SLOT
+  renders at, when it has a fixed one. `YouTubeDriver` declares `16 / 9`;
+  Instagram and Telegram declare nothing, because they show a thumbnail in the
+  post's own shape.
+
+  This exists because the failure it describes is silent. A network with a fixed
+  slot does not refuse a thumbnail of the wrong shape — it pads it. YouTube fits a
+  1080x1920 cover into 1280x720 as a 404px centre strip and fills the remaining
+  68% of the frame with a darkened, blurred, zoomed copy of the same image;
+  `thumbnails.set` answers 204, nothing is logged, and a caller holding only
+  `maxImageBytes` has no way to learn that the image it sent is mostly not being
+  shown. The driver cannot fix this for the caller — it has one file and no way
+  to re-lay-out a design — so the honest move is to declare the constraint and
+  let the caller, who knows what assets it can produce, pick.
+
+  A note the number does not carry: a Short ALSO has a 9:16 thumbnail family
+  (`oar1`/`oar2`/`oar3`) that the channel and Shorts tabs render, auto-picked from
+  film frames, which `thumbnails.set` cannot write. `thumbnailAspect` is the shape
+  of the only slot the API controls, not of every surface the video appears on.
+
 ## 0.3.0 — 2026-08-08
 
 A MINOR because a YouTube config key moved. Instagram and Telegram are untouched.

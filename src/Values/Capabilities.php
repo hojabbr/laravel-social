@@ -34,6 +34,26 @@ final readonly class Capabilities
      * @param  bool  $pullsMedia  The network FETCHES the file from a public URL
      *                            instead of taking bytes, so the caller has to
      *                            expose one before it builds the request.
+     * @param  float|null  $thumbnailAspect  The width/height this network's
+     *                                       thumbnail SLOT renders at, when it
+     *                                       has a fixed one. Null means the
+     *                                       thumbnail is shown in the post's own
+     *                                       shape and any aspect is fine.
+     *
+     *                                       Declared here because the alternative
+     *                                       is silent: a network with a fixed
+     *                                       slot does not refuse a thumbnail of
+     *                                       the wrong shape, it PADS it — YouTube
+     *                                       fits a 1080x1920 cover into 1280x720
+     *                                       as a 404px centre strip and fills the
+     *                                       remaining 68% of the frame with a
+     *                                       darkened, blurred copy. Nothing is
+     *                                       logged and the API answers 204, so a
+     *                                       caller holding only `maxImageBytes`
+     *                                       has no way to learn that the image it
+     *                                       sent is mostly not being shown. The
+     *                                       caller picks the asset; this is the
+     *                                       fact it needs to pick with.
      */
     public function __construct(
         public array $placements,
@@ -45,6 +65,7 @@ final readonly class Capabilities
         public int $maxVideoBytes,
         public int $maxImageBytes,
         public bool $pullsMedia = false,
+        public ?float $thumbnailAspect = null,
     ) {}
 
     public function supports(Placement $placement): bool
