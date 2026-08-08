@@ -15,6 +15,15 @@ namespace Hojabbr\Social\Values;
  * a Telegram bot token — belong to the driver, not here: they are shared by
  * every account on that network, and duplicating them per account is how two
  * copies of one secret start to disagree.
+ *
+ * `$refreshToken` is a SECOND credential slot rather than a use of `$token`,
+ * and the separation is load-bearing. An OAuth grant has two lifetimes: a
+ * long-lived refresh token that is the account's identity, and a short-lived
+ * access token derived from it. A consumer's rotation step writes the ACCESS
+ * token back to wherever it read a token from, so a network holding its grant in
+ * `$token` would have that grant overwritten by an hour-long string the first
+ * night the rotation ran — a total, silent loss of the connection. Two slots
+ * make that inexpressible.
  */
 final readonly class Account
 {
@@ -24,6 +33,7 @@ final readonly class Account
         public string $id,
         public ?string $handle = null,
         public ?string $token = null,
+        public ?string $refreshToken = null,
     ) {}
 
     /**

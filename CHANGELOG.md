@@ -6,6 +6,74 @@ This project follows [Semantic Versioning](https://semver.org). While the versio
 is below `1.0.0`, a breaking change lands in a new MINOR (`0.2.0`), not a patch —
 so pin with `^0.1.0` and read this file before moving between minors.
 
+## 0.3.0 — 2026-08-08
+
+A MINOR because a YouTube config key moved. Instagram and Telegram are untouched.
+
+### Changed
+
+- **A YouTube channel is an ACCOUNT, not the network.** Its grant moved from
+  `networks.youtube.refresh_token` to `accounts.youtube.<key>.refresh_token`, and
+  every call in the driver now derives its access token from the account it was
+  handed — publish, delete, both metrics reads, `refresh()`, `credentials()`,
+  `channelSummary()`. At network level, "one channel" was a property of the driver
+  rather than of the config, so a second channel was unreachable without a second
+  network entry duplicating the OAuth client. The client id/secret stay at network
+  level: they identify the Google *app*, which every channel connected through it
+  shares.
+
+  **Upgrading:** move your refresh token into the account entry. Nothing reads the
+  old key any more, so a token left at network level silently stops publishing —
+  `health()` will say so.
+
+- `Account` gained a `refreshToken` slot, hydrated from an account's
+  `refresh_token`. It is deliberately NOT a reuse of `token`: an OAuth grant has
+  two lifetimes, and a consumer's rotation writes the short-lived ACCESS token
+  back to wherever it read a token from. A grant held in `token` would be
+  overwritten by an hour-long string the first night the rotation ran — a total,
+  silent loss of the connection. Two slots make that inexpressible.
+
+- `YouTubeDriver::hasAccount()` now asks whether the account holds a grant, not
+  whether it has an id. `mine=true` reads the channel behind a token, so the
+  channel id is a convenience for an admin page rather than a credential; the old
+  test refused to route to a freshly connected channel until someone pasted its id.
+
+- `YouTubeDriver::health()` no longer reports `configured` when the Google client
+  is set but no channel is granted — it could route nowhere while showing green —
+  and its details now carry a `channels` map keyed by account instead of one
+  channel's fields inlined.
+
+### Added
+
+- **A Telegram send now returns the message's public permalink.** A consumer that
+  lists "where this was published" needs the POST's own URL, and only the driver
+  ever sees the chat object the link is built from (`t.me/<username>/<topic>/<id>`
+  in a forum, without the topic segment elsewhere; the general topic is thread 1
+  and Telegram omits it from its own links, so it is dropped here too). A chat
+  with no public username reports null rather than a `t.me/c/…` link, which opens
+  for members only — a link most readers cannot follow is worse than no link.
+  Albums report the first message's permalink.
+
+### Fixed
+
+- `YouTubeDriver::SCOPES` was missing `youtube.force-ssl`, which is the scope
+  `videos.delete` needs. The class implements `SupportsDeletion`, so every
+  deletion would have answered 403 — worse than not offering deletion, because a
+  retraction reports a success it never had. Existing grants must be re-consented
+  to pick the scope up.
+
+- `videos.delete` sent its `id` as a request BODY, because Laravel's
+  `delete($url, $data)` puts `$data` there — while the API reads `id` from the
+  query string alone. Every deletion therefore answered "Required parameter: id"
+  from a call site that looked correct, so `SupportsDeletion` was implemented and
+  non-functional at the same time. The query now goes in the URL.
+
+- `thumbnails.set` sent a hardcoded `image/jpeg` over whatever bytes it was given.
+  The body is raw binary, so the `Content-Type` is the only thing telling YouTube
+  what the file is, and a PNG under that header is a refusal the caller never
+  sees — this step is best-effort and swallows its own failure. The type is now
+  derived with `mime_content_type()`.
+
 ## 0.2.1 — 2026-08-08
 
 ### Fixed

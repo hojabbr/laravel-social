@@ -81,6 +81,9 @@ Two lists. `networks` are transports — credentials, API bases, queue lanes.
         'fa' => ['id' => '17841400000000000', 'handle' => 'myaccount', 'token' => 'IGAA…'],
         'en' => ['id' => '17841400000000001', 'handle' => 'myaccount_en', 'token' => 'IGAA…'],
     ],
+    'youtube' => [
+        'fa' => ['id' => 'UC…', 'handle' => 'mychannel', 'refresh_token' => '1//…'],
+    ],
 ],
 ```
 
@@ -93,9 +96,22 @@ Two things follow from that split:
   same driver class with different credentials. The *network* is the config entry;
   the *driver* is the code.
 
-Per-account credentials (an Instagram user token) live on the account.
-Network-wide credentials (a Meta app secret, a bot token) live on the network —
-duplicating one secret per account is how two copies of it start to disagree.
+Per-account credentials live on the account: an Instagram user `token`, a YouTube
+channel's `refresh_token`. Network-wide credentials — a Meta app secret, a Google
+OAuth client, a bot token — live on the network, because duplicating one secret
+per account is how two copies of it start to disagree.
+
+**`token` and `refresh_token` are separate slots on purpose.** An OAuth grant has
+two lifetimes, and a rotation step writes the short-lived ACCESS token back to
+wherever it read a token from. A network keeping its grant in `token` would have
+that grant overwritten the first night the rotation ran, losing the connection
+silently. Two slots make that inexpressible.
+
+**Routing to a second account is a config decision, never a code branch.** Give
+each channel or profile its own key and let your app pick one; nothing here
+special-cases a network with more than one identity. If a key exists for only some
+locales — one Persian YouTube channel and no English one — the network is simply
+not a target for the others, and your routing reports that as an ordinary refusal.
 
 Config keys carry `env()` defaults, which you are free to replace with whatever
 your app uses for secrets. Nothing in this package reads `env()` directly.
@@ -113,7 +129,7 @@ use Hojabbr\Social\Values\{Media, PublishRequest};
 $driver = Social::driver('youtube');
 
 $result = $driver->publish(new PublishRequest(
-    destination: $driver->destination('default', Placement::Reel),
+    destination: $driver->destination('fa', Placement::Reel),
     title: 'How a bond auction works',
     body: "The long description.\n\nSecond paragraph.",
     tags: ['finance', 'education'],

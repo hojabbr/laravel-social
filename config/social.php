@@ -56,13 +56,12 @@ return [
 
             'enabled' => (bool) env('SOCIAL_YOUTUBE_ENABLED', false),
 
+            // The Google APP, shared by every channel connected through it. The
+            // per-CHANNEL grant is not here — it is an account's own
+            // `refresh_token`, because a second channel is a second account and
+            // not a second app.
             'client_id' => env('SOCIAL_YOUTUBE_CLIENT_ID', ''),
             'client_secret' => env('SOCIAL_YOUTUBE_CLIENT_SECRET', ''),
-
-            // One refresh token per connected Google account, obtained once
-            // through the authorization-code flow and then never expiring
-            // (unless the user revokes it or the project stays in testing).
-            'refresh_token' => env('SOCIAL_YOUTUBE_REFRESH_TOKEN', ''),
 
             'api_base' => 'https://www.googleapis.com/youtube/v3',
             'upload_base' => 'https://www.googleapis.com/upload/youtube/v3',
@@ -109,8 +108,14 @@ return [
             'en' => ['id' => '', 'handle' => '', 'token' => env('SOCIAL_INSTAGRAM_EN_TOKEN', '')],
         ],
 
+        // `refresh_token` is the channel's own grant, obtained once through the
+        // authorization-code flow and then open-ended (until it is revoked, or
+        // the Google project stays in testing). It is a separate slot from
+        // `token` on purpose: a consumer's nightly rotation writes the ACCESS
+        // token back to wherever it read a token from, and a grant kept in
+        // `token` would be overwritten by an hour-long string the first night.
         'youtube' => [
-            'default' => ['id' => '', 'handle' => ''],
+            'default' => ['id' => '', 'handle' => '', 'refresh_token' => env('SOCIAL_YOUTUBE_REFRESH_TOKEN', '')],
         ],
 
         'telegram' => [

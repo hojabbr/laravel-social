@@ -201,13 +201,19 @@ class YouTubeClient
     }
 
     /**
+     * The query goes in the URL, not through the second argument: Laravel's
+     * `delete($url, $data)` sends `$data` as the request BODY, and
+     * `videos.delete` reads `id` from the query string alone — so every
+     * deletion answered "Required parameter: id" while looking like a call that
+     * had been made correctly.
+     *
      * @param  array<string, mixed>  $query
      *
      * @throws ConnectionException
      */
     public function delete(string $path, array $query, string $accessToken): Response
     {
-        return $this->request($accessToken)->delete($this->endpoint('api_base').'/'.ltrim($path, '/'), $query);
+        return $this->request($accessToken)->delete($this->endpoint('api_base').'/'.ltrim($path, '/').'?'.http_build_query($query));
     }
 
     /**

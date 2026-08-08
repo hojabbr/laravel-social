@@ -28,6 +28,15 @@ use Illuminate\Support\Facades\Log;
  * the URL we hand back — never in what is sent — and a caller that lies about the
  * placement gets a working post with a link that redirects.
  *
+ * A channel is an ACCOUNT, not the network. The grant — one Google refresh token
+ * per connected channel — therefore lives in `accounts.youtube.<key>.refresh_token`
+ * and every call here derives its access token from the account it was handed.
+ * Holding it at network level made "one channel" a property of the driver rather
+ * than of the config, so a second channel was unreachable without a second
+ * network entry duplicating the OAuth client. The client id/secret DO stay at
+ * network level: they identify the Google app, and every channel connected
+ * through it shares them.
+ *
  * The outcome mapping follows where the video starts to exist:
  *
  *   token refresh / session open  → Rejected. No video, nothing to undo.
@@ -41,8 +50,14 @@ use Illuminate\Support\Facades\Log;
  */
 class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTokens, SupportsDeletion
 {
-    /** What the OAuth grant has to cover: upload, then read back what we uploaded. */
-    public const SCOPES = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly';
+    /**
+     * What the OAuth grant has to cover: upload, read back what we uploaded,
+     * read its analytics — and `youtube.force-ssl`, which is the scope
+     * `videos.delete` needs. Without that last one this class implements
+     * SupportsDeletion and every deletion answers 403, which is worse than not
+     * offering deletion at all: a retraction would report success it never had.
+     */
+    public const SCOPES = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/yt-analytics.readonly';
 
     /** Hard API limit; a longer title is refused outright rather than trimmed by YouTube. */
     private const TITLE_LIMIT = 100;
@@ -95,31 +110,60 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
         return new RateProfile(0);
     }
 
+    /**
+     * An account is postable when it holds its own grant. The CHANNEL ID is not
+     * part of that test — `mine=true` reads the channel behind a token, so the id
+     * is a convenience for an admin page rather than a credential — which is why
+     * this overrides the base class's "configured means it has an id".
+     */
+    public function hasAccount(string $key): bool
+    {
+        return $this->refreshTokenFor($this->account($key)) !== '';
+    }
+
     public function isUsable(): bool
     {
-        return $this->isEnabled() && $this->hasOauthCredentials() && $this->refreshToken() !== '';
+        return $this->isEnabled() && $this->hasOauthCredentials() && $this->connectedKeys() !== [];
     }
 
     public function health(): Health
     {
-        $configured = $this->hasOauthCredentials() && $this->refreshToken() !== '';
-
-        if (! $configured) {
+        if (! $this->hasOauthCredentials()) {
             return new Health($this->network, $this->isEnabled(), false, [
-                'clientConfigured' => $this->hasOauthCredentials(),
+                'clientConfigured' => false,
                 'connected' => false,
+                'channels' => [],
             ]);
         }
 
-        $account = $this->account($this->accountKeys()[0] ?? 'default');
-        $channel = $this->channelSummary($account);
+        $connected = $this->connectedKeys();
+
+        if ($connected === []) {
+            // Deliberately NOT "ready": the client is configured but no channel
+            // is granted, so this network can route nowhere. Reporting ready here
+            // is how an admin page shows green while every publish is refused.
+            return new Health($this->network, $this->isEnabled(), false, [
+                'clientConfigured' => true,
+                'connected' => false,
+                'channels' => [],
+            ], 'The Google client is configured but no channel has been connected yet.');
+        }
+
+        $channels = [];
+
+        foreach ($connected as $key) {
+            $channels[$key] = $this->channelSummary($this->account($key));
+        }
+
+        $unreadable = array_keys(array_filter($channels, static fn (array $channel): bool => $channel === []));
 
         return new Health($this->network, $this->isEnabled(), true, [
             'clientConfigured' => true,
-            'connected' => $channel !== [],
+            'connected' => true,
             'privacyStatus' => $this->text('privacy_status', 'public'),
-            ...$channel,
-        ], $channel === [] ? 'Could not read the channel back from YouTube; the grant may have been revoked.' : null);
+            'channels' => $channels,
+        ], $unreadable === [] ? null : 'Could not read these channels back from YouTube; the grant may have been revoked: '
+            .implode(', ', $unreadable).'.');
     }
 
     // -----------------------------------------------------------------
@@ -152,11 +196,13 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             return PublishResult::rejected("The video at {$media->path} is empty.");
         }
 
-        $token = $this->accessToken();
+        $account = $request->destination->account;
+        $token = $this->accessToken($account);
 
         if ($token === null) {
             return PublishResult::rejected(
-                'Could not get a YouTube access token — the channel grant is missing, revoked, or Google refused the refresh.',
+                "Could not get a YouTube access token for the '{$account->key}' channel — "
+                .'its grant is missing, revoked, or Google refused the refresh.',
             );
         }
 
@@ -252,8 +298,14 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             return;
         }
 
+        // Derived, not assumed: thumbnails.set takes a raw binary body, so the
+        // Content-Type is the ONLY thing telling YouTube what the bytes are. A
+        // hardcoded 'image/jpeg' over a PNG is a refusal the caller cannot see,
+        // because this step is best-effort and swallows its own failure.
+        $mimeType = mime_content_type($thumbnail) ?: 'image/jpeg';
+
         try {
-            $response = $this->client()->setThumbnail($videoId, $thumbnail, 'image/jpeg', $token);
+            $response = $this->client()->setThumbnail($videoId, $thumbnail, $mimeType, $token);
 
             if (! $response->successful()) {
                 Log::warning('YouTube refused the custom thumbnail.', [
@@ -361,7 +413,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
      */
     public function delete(Account $account, int|string $externalId): bool
     {
-        $token = $this->accessToken();
+        $token = $this->accessToken($account);
 
         if ($token === null) {
             return false;
@@ -391,7 +443,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
 
     public function mediaMetrics(Account $account, int|string $externalId): Metrics
     {
-        $token = $this->accessToken();
+        $token = $this->accessToken($account);
 
         if ($token === null) {
             return Metrics::unavailable($this->network, 'No YouTube access token.');
@@ -418,7 +470,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
 
     public function accountMetrics(Account $account): Metrics
     {
-        $token = $this->accessToken();
+        $token = $this->accessToken($account);
 
         if ($token === null) {
             return Metrics::unavailable($this->network, 'No YouTube access token.');
@@ -500,7 +552,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
      */
     public function refresh(Account $account): ?Credentials
     {
-        $refreshToken = $this->refreshToken();
+        $refreshToken = $this->refreshTokenFor($account);
 
         if ($refreshToken === '') {
             return null;
@@ -517,7 +569,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
 
     public function credentials(Account $account): ?Credentials
     {
-        $refreshToken = $this->refreshToken();
+        $refreshToken = $this->refreshTokenFor($account);
 
         if ($refreshToken === '') {
             return null;
@@ -546,7 +598,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
      */
     public function channelSummary(Account $account): array
     {
-        $token = $this->accessToken();
+        $token = $this->accessToken($account);
 
         if ($token === null) {
             return [];
@@ -572,9 +624,9 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
         ];
     }
 
-    private function accessToken(): ?string
+    private function accessToken(Account $account): ?string
     {
-        $refreshToken = $this->refreshToken();
+        $refreshToken = $this->refreshTokenFor($account);
 
         if ($refreshToken === '' || ! $this->hasOauthCredentials()) {
             return null;
@@ -583,9 +635,23 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
         return $this->client()->accessToken($refreshToken)['access_token'] ?? null;
     }
 
-    private function refreshToken(): string
+    /**
+     * One channel's grant. Read off the ACCOUNT so two channels cannot share a
+     * token by accident — the network no longer holds one to fall back to.
+     */
+    private function refreshTokenFor(Account $account): string
     {
-        return $this->text('refresh_token');
+        return trim((string) $account->refreshToken);
+    }
+
+    /**
+     * The account keys that actually hold a grant, in config order.
+     *
+     * @return list<string>
+     */
+    private function connectedKeys(): array
+    {
+        return array_values(array_filter($this->accountKeys(), $this->hasAccount(...)));
     }
 
     private function hasOauthCredentials(): bool

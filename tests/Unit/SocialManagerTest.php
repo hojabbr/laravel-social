@@ -14,12 +14,12 @@ function manager(array $config = []): SocialManager
     return new SocialManager(new Repository(['social' => $config === [] ? [
         'networks' => [
             'instagram' => ['driver' => 'instagram', 'enabled' => true],
-            'youtube' => ['driver' => 'youtube', 'enabled' => true, 'client_id' => 'id', 'client_secret' => 'secret', 'refresh_token' => 'refresh'],
+            'youtube' => ['driver' => 'youtube', 'enabled' => true, 'client_id' => 'id', 'client_secret' => 'secret'],
             'telegram' => ['driver' => 'telegram', 'enabled' => false, 'token' => ''],
         ],
         'accounts' => [
             'instagram' => ['fa' => ['id' => '1784', 'token' => 'IGAA-token']],
-            'youtube' => ['default' => ['id' => 'UC123']],
+            'youtube' => ['default' => ['id' => 'UC123', 'refresh_token' => 'grant']],
             'telegram' => ['default' => ['id' => '-100999']],
         ],
     ] : $config]));

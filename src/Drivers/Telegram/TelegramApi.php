@@ -64,7 +64,10 @@ class TelegramApi
 
             $messageId = $message->get('message_id');
 
-            return PublishResult::sent(is_numeric($messageId) ? (int) $messageId : null);
+            return PublishResult::sent(
+                is_numeric($messageId) ? (int) $messageId : null,
+                $this->permalink($message->all()),
+            );
         } catch (TelegramResponseException $exception) {
             return PublishResult::rejected($this->describe($exception));
         } catch (TelegramSDKException $exception) {
@@ -113,7 +116,9 @@ class TelegramApi
                 return PublishResult::unknown('Telegram accepted the album but returned no message ids — check the group before re-posting.');
             }
 
-            return PublishResult::sentMany($ids);
+            $first = $messages->all()[0] ?? null;
+
+            return PublishResult::sentMany($ids, is_array($first) ? $this->permalink($first) : null);
         } catch (TelegramResponseException $exception) {
             return PublishResult::rejected($this->describe($exception));
         } catch (TelegramSDKException $exception) {
@@ -181,6 +186,38 @@ class TelegramApi
                 $attempt++;
             }
         }
+    }
+
+    /**
+     * The public permalink of a message Telegram just accepted, when there is
+     * one to build.
+     *
+     * A link exists only for a chat with a PUBLIC username: `t.me/c/<id>/…` is
+     * the private form, and it opens for members only, so handing one to a
+     * caller that publishes links on a website would print an address most
+     * readers cannot follow. A private group therefore reports null and the
+     * caller shows nothing — the same shape as a network with no permalink.
+     *
+     * In a forum the topic id is part of the path (`t.me/<name>/<topic>/<id>`);
+     * a plain channel has no topic segment. The general topic is thread 1 and
+     * Telegram omits it from its own links, so it is dropped here too.
+     *
+     * @param  array<string, mixed>  $message
+     */
+    private function permalink(array $message): ?string
+    {
+        $chat = $message['chat'] ?? null;
+        $username = is_array($chat) ? ($chat['username'] ?? null) : null;
+        $messageId = $message['message_id'] ?? null;
+
+        if (! is_string($username) || $username === '' || ! is_numeric($messageId)) {
+            return null;
+        }
+
+        $thread = $message['message_thread_id'] ?? null;
+        $path = is_numeric($thread) && (int) $thread > 1 ? ((int) $thread).'/' : '';
+
+        return "https://t.me/{$username}/{$path}".((int) $messageId);
     }
 
     /**

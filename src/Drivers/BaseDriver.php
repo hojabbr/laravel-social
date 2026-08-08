@@ -67,6 +67,7 @@ abstract class BaseDriver implements Driver
             id: trim((string) ($account['id'] ?? '')),
             handle: ($handle = trim((string) ($account['handle'] ?? ''))) === '' ? null : $handle,
             token: ($token = trim((string) ($account['token'] ?? ''))) === '' ? null : $token,
+            refreshToken: ($refresh = trim((string) ($account['refresh_token'] ?? ''))) === '' ? null : $refresh,
         );
     }
 
