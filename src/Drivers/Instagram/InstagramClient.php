@@ -81,6 +81,29 @@ class InstagramClient
         );
     }
 
+    /**
+     * Whether a refusal is Meta's anti-spam block rather than an ordinary error.
+     *
+     * Error 368 ("Action Blocked") with OAuthException code 9 is an undocumented,
+     * account-level judgement about POSTING BEHAVIOUR — it scores burst rate and
+     * repetitive text, not a daily total — and nothing reports whether it has
+     * lifted. It is exposed here as a question rather than an outcome because it
+     * does not change what happened to the request: nothing was created, so it is
+     * still a rejection. What it changes is what the CALLER should do next, which
+     * is stop writing comments for a while.
+     */
+    public static function isSpamBlock(Response $response): bool
+    {
+        $error = $response->json('error');
+
+        if (! is_array($error)) {
+            return false;
+        }
+
+        return (int) ($error['code'] ?? 0) === 368
+            || ((int) ($error['code'] ?? 0) === 9 && ($error['type'] ?? null) === 'OAuthException');
+    }
+
     private function url(string $path): string
     {
         return rtrim($this->baseUrl, '/').'/'.ltrim($path, '/');

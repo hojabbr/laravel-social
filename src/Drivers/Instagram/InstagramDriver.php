@@ -4,6 +4,7 @@ namespace Hojabbr\Social\Drivers\Instagram;
 
 use Hojabbr\Social\Contracts\ProvidesAnalytics;
 use Hojabbr\Social\Contracts\RefreshesTokens;
+use Hojabbr\Social\Contracts\SupportsComments;
 use Hojabbr\Social\Drivers\BaseDriver;
 use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\Values\Account;
@@ -41,8 +42,13 @@ use Illuminate\Support\Sleep;
  * answers "This api only supports Instagram API with Facebook login only" on this
  * token type, so a retraction path has to surface the permalink for a human
  * rather than believe a delete it never made.
+ *
+ * SupportsComments IS implemented, and the pair is not a contradiction: a
+ * COMMENT can be deleted on this token type while a POST cannot. Two
+ * capabilities, two interfaces — which is exactly why they are two interfaces
+ * and not one flag with a comment next to it.
  */
-class InstagramDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTokens
+class InstagramDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTokens, SupportsComments
 {
     /** Caption ceiling, hashtags included — they are caption text here. */
     private const CAPTION_LIMIT = 2200;
@@ -55,6 +61,18 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
 
     /** Long-lived Instagram user tokens last 60 days and refresh in place. */
     private const TOKEN_LIFETIME_DAYS = 60;
+
+    /**
+     * The marker that opens the error of a reply Meta refused with an ACTION
+     * BLOCK rather than an ordinary error.
+     *
+     * A published constant, not a phrase to grep for: the caller's response to an
+     * action block is account-level and lasting (stop writing comments), so both
+     * sides have to agree on how one is recognised, and a string literal repeated
+     * in two repositories is how they stop agreeing. See
+     * {@see InstagramClient::isSpamBlock()} for what an action block actually is.
+     */
+    public const COMMENT_BLOCKED = '[action-blocked]';
 
     private ?InstagramClient $client = null;
 
@@ -371,9 +389,26 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
      */
     public function permalink(Account $account, int|string $mediaId): ?string
     {
-        $url = $this->read($account, (string) $mediaId, ['fields' => 'permalink'])['permalink'] ?? null;
+        $url = $this->media($account, $mediaId, ['permalink'])['permalink'] ?? null;
 
         return is_string($url) && $url !== '' ? $url : null;
+    }
+
+    /**
+     * Named fields of one media object, or [] when the read failed.
+     *
+     * Public because a caller may want more than the permalink — a caption, a
+     * media type, a timestamp — and the alternative is a method per field, each
+     * a copy of this one call. A failure is [] rather than an exception for the
+     * same reason permalink() swallows one: nothing here is worth failing a
+     * publish, a cache fill or a comment claim over.
+     *
+     * @param  list<string>  $fields
+     * @return array<string, mixed>
+     */
+    public function media(Account $account, int|string $mediaId, array $fields): array
+    {
+        return $this->read($account, (string) $mediaId, ['fields' => implode(',', $fields)]);
     }
 
     // -----------------------------------------------------------------
@@ -561,6 +596,131 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
         }
 
         return $values;
+    }
+
+    // -----------------------------------------------------------------
+    // Comments
+    // -----------------------------------------------------------------
+
+    /**
+     * Reply to a comment. A reply CREATES a public object, so this carries the
+     * full three-state outcome: refused before anything existed, created, or
+     * never heard back.
+     */
+    public function replyToComment(Account $account, int|string $commentId, string $text): PublishResult
+    {
+        if ($account->token === null) {
+            return PublishResult::rejected('The Instagram account has no token, so no reply can be posted.');
+        }
+
+        try {
+            $response = $this->client()->post((string) $commentId.'/replies', ['message' => $text], $account->token);
+        } catch (ConnectionException $unreachable) {
+            // The connection dropped around a NON-IDEMPOTENT write. A reply may
+            // be live under the comment, so this is never safe to retry blind —
+            // the same reasoning as step 3 of the publish ladder.
+            return PublishResult::unknown('The reply request to Instagram did not complete: '.$unreachable->getMessage());
+        }
+
+        if (! $response->successful()) {
+            // An action block is still a REJECTION — nothing was created, so the
+            // caller must be free to release its claim and try a different text
+            // later. What it is not is an ordinary refusal, and the caller has to
+            // be able to tell: the marker is a published constant both sides
+            // reference, rather than a phrase one side greps for.
+            return PublishResult::rejected(
+                (InstagramClient::isSpamBlock($response) ? self::COMMENT_BLOCKED.' ' : '')
+                .'Instagram refused the reply. '.InstagramClient::errorOf($response),
+            );
+        }
+
+        $replyId = $response->json('id');
+
+        if (! is_scalar($replyId) || (string) $replyId === '') {
+            // Accepted, but we cannot name what was created — so it can never be
+            // deleted or matched against an inbound webhook echo. Unknown rather
+            // than Sent, because Sent would claim we hold an id we do not.
+            return PublishResult::unknown(
+                'Instagram accepted the reply but returned no comment id — a reply may be live; check the post before replying again.',
+            );
+        }
+
+        // No url: a comment has no permalink endpoint on this host, and inventing
+        // one would put a URL in `output` that resolves to something else.
+        return PublishResult::sent((string) $replyId);
+    }
+
+    /**
+     * Hide or unhide a comment.
+     *
+     * A 200 is NOT enough. Graph answers this endpoint with `{"success":true}`
+     * and will answer 200 with a different body when it has quietly done nothing,
+     * so the body is what is asserted — a caller that trusted the status would
+     * report a hide that never happened.
+     */
+    public function hideComment(Account $account, int|string $commentId, bool $hidden): bool
+    {
+        return $this->commentWrite(
+            $account,
+            fn (string $token) => $this->client()->post((string) $commentId, ['hide' => $hidden ? 'true' : 'false'], $token),
+        );
+    }
+
+    /**
+     * Delete a comment.
+     *
+     * This works where whole-POST deletion does not (see the class docblock):
+     * Instagram Login refuses `DELETE /{ig-media-id}` but accepts
+     * `DELETE /{ig-comment-id}` for a comment the account owns and for a reader's
+     * comment on the account's own media. Two capabilities, two interfaces —
+     * which is why this driver implements SupportsComments and not
+     * SupportsDeletion.
+     */
+    public function deleteComment(Account $account, int|string $commentId): bool
+    {
+        return $this->commentWrite(
+            $account,
+            fn (string $token) => $this->client()->delete((string) $commentId, $token),
+        );
+    }
+
+    /**
+     * The shared shape of the two boolean comment writes: no token is false, an
+     * unreachable host is false, and a 200 without `success: true` is false.
+     *
+     * @param  callable(string): \Illuminate\Http\Client\Response  $call
+     */
+    private function commentWrite(Account $account, callable $call): bool
+    {
+        if ($account->token === null) {
+            return false;
+        }
+
+        try {
+            $response = $call($account->token);
+        } catch (ConnectionException) {
+            return false;
+        }
+
+        return $response->successful() && $response->json('success') === true;
+    }
+
+    /**
+     * How fast COMMENTS may be written, which is a different question from how
+     * fast posts may be published.
+     *
+     * Its own profile rather than a change to rateProfile(), because Instagram
+     * governs the two separately: publishing is bounded by a daily quota with no
+     * per-request pacing, while commenting is policed by an undocumented
+     * anti-spam heuristic that scores BURST RATE and repetitive text (see
+     * isSpamBlock()). Folding a comment floor into rateProfile() would silently
+     * slow the Reel publisher, which has no such constraint.
+     *
+     * The number is a floor, not a target: the application paces well outside it.
+     */
+    public function commentRateProfile(): RateProfile
+    {
+        return new RateProfile(20_000);
     }
 
     public function client(): InstagramClient
