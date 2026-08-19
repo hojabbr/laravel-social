@@ -484,6 +484,10 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
      * Renew a 60-day long-lived token in place. Instagram's own endpoint, on the
      * same host, with the token authenticating its own renewal — no app secret
      * involved and no user interaction.
+     *
+     * Through {@see InstagramClient::getWithTokenInQuery()}, not the ordinary
+     * reader: this is the one endpoint here that takes the token as a query
+     * parameter and rejects it as a header.
      */
     public function refresh(Account $account): ?Credentials
     {
@@ -492,7 +496,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
         }
 
         try {
-            $response = $this->client()->get('refresh_access_token', [
+            $response = $this->client()->getWithTokenInQuery('refresh_access_token', [
                 'grant_type' => 'ig_refresh_token',
             ], $account->token);
         } catch (ConnectionException) {

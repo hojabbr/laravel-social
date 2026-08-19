@@ -58,6 +58,32 @@ class InstagramClient
     }
 
     /**
+     * The one call on this host that refuses a Bearer header.
+     *
+     * `refresh_access_token` is an OAuth operation wearing a Graph URL. The
+     * token is the SUBJECT of the request rather than the authentication for
+     * it, and Meta reads it only from the query string: sent as a header, the
+     * endpoint answers `400 IGApiException code 100 — The parameter
+     * access_token is required`, on both the versioned and unversioned paths.
+     *
+     * That refusal is indistinguishable, at every surface above this line, from
+     * the one a genuinely dead token earns. So a rotation that never once
+     * worked reported "the network refused the renewal" every night, which
+     * reads as an account needing re-consent — and an Instagram long-lived
+     * token is renewable ONLY while it is still valid, so the failure mode of
+     * believing that report is a publishing path that stops dead at sixty days
+     * with no way back but a human re-authorising.
+     *
+     * @param  array<string, mixed>  $query
+     *
+     * @throws ConnectionException
+     */
+    public function getWithTokenInQuery(string $path, array $query, string $token): Response
+    {
+        return $this->pending()->get($this->url($path), [...$query, 'access_token' => $token]);
+    }
+
+    /**
      * The human-readable half of a Graph error. Graph nests it under `error`,
      * with `error_user_msg` being the one written for a person when it exists.
      */
@@ -111,8 +137,12 @@ class InstagramClient
 
     private function request(string $token): PendingRequest
     {
-        return Http::withToken($token)
-            ->acceptJson()
+        return $this->pending()->withToken($token);
+    }
+
+    private function pending(): PendingRequest
+    {
+        return Http::acceptJson()
             ->timeout($this->timeout)
             ->connectTimeout(5);
     }
