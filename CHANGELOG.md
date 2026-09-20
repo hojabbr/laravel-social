@@ -3,6 +3,16 @@
 Semantic Versioning. Below `1.0.0` a breaking change lands in a new minor, so pin with `^0.6` and read
 this file before moving between minors.
 
+## 0.6.2 — 2026-09-20
+
+### Fixed
+
+- `ProvidesAnalytics::mediaMetrics()` takes an optional `?Placement $placement`, and the Instagram driver
+  asks for the metric set that placement actually answers. `/insights` refuses the WHOLE call when one
+  metric does not apply, so a carousel or a story asked for `ig_reels_avg_watch_time` returned nothing at
+  all rather than a partial reading. A story asks `reach,views,replies`; a feed post drops the reel metric;
+  a reel and an unspecified placement are unchanged, so the parameter is additive.
+
 ## 0.6.1 — 2026-08-19
 
 ### Fixed

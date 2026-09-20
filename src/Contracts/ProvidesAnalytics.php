@@ -2,6 +2,7 @@
 
 namespace Hojabbr\Social\Contracts;
 
+use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Metrics;
 
@@ -16,8 +17,14 @@ interface ProvidesAnalytics
 {
     /**
      * Performance of one published object.
+     *
+     * `$placement` is what the object was published AS, when the caller knows.
+     * A network whose metric vocabulary differs per placement needs it: asking
+     * a carousel for a reel's watch time is not a missing field, it is a 400
+     * that loses every other metric in the same call. Null keeps the caller's
+     * old behaviour, so this stays additive.
      */
-    public function mediaMetrics(Account $account, int|string $externalId): Metrics;
+    public function mediaMetrics(Account $account, int|string $externalId, ?Placement $placement = null): Metrics;
 
     /**
      * Account-level figures (followers, reach, views).

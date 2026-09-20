@@ -491,7 +491,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
     // Analytics
     // -----------------------------------------------------------------
 
-    public function mediaMetrics(Account $account, int|string $externalId): Metrics
+    public function mediaMetrics(Account $account, int|string $externalId, ?Placement $placement = null): Metrics
     {
         $token = $this->accessToken($account);
 

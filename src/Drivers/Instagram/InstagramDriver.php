@@ -415,9 +415,27 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
     // Analytics
     // -----------------------------------------------------------------
 
-    public function mediaMetrics(Account $account, int|string $externalId): Metrics
+    /**
+     * The metric vocabulary is per PLACEMENT, and getting it wrong costs the
+     * whole reading rather than one field.
+     *
+     * `/insights` refuses the entire call when one metric does not apply to the
+     * media: a carousel asked for `ig_reels_avg_watch_time` answers 400 and
+     * returns no reach, no saves and no views either. That is why, on
+     * 2026-09-09, 374 reels had samples and all 36 stories and 27 carousels had
+     * none: the sampler asked every post the same question.
+     *
+     * A story is also EPHEMERAL. It answers for about 24 hours and then its
+     * numbers are gone for good, so a story is sampled the day it is posted or
+     * never.
+     */
+    public function mediaMetrics(Account $account, int|string $externalId, ?Placement $placement = null): Metrics
     {
-        $metrics = ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'ig_reels_avg_watch_time'];
+        $metrics = match ($placement) {
+            Placement::Story => ['reach', 'views', 'replies'],
+            Placement::Feed => ['reach', 'likes', 'comments', 'saved', 'shares', 'views'],
+            default => ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'ig_reels_avg_watch_time'],
+        };
 
         $data = $this->read($account, (string) $externalId.'/insights', ['metric' => implode(',', $metrics)]);
 
