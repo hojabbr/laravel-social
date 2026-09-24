@@ -123,12 +123,13 @@ Check with `instanceof`; a driver implements one only when its network has the f
 | --- | --- |
 | `SupportsDeletion` | Telegram, YouTube |
 | `SupportsCoverUpdate` | YouTube |
+| `SupportsMediaReplacement` (new file and caption in the same post) | Telegram |
 | `SupportsComments` (write-only: reply, hide, delete) | Instagram |
 | `SupportsTopics` | Telegram |
 | `ProvidesAnalytics` | Instagram, YouTube |
 | `RefreshesTokens` | Instagram, YouTube |
 
-Instagram cannot delete posts or replace a Reel's cover on an Instagram-Login token, and its comment read
+Instagram cannot delete posts, replace a Reel's cover or its video on an Instagram-Login token, and its comment read
 API returns an empty list, so there is no read method.
 
 ## Analytics
@@ -205,7 +206,9 @@ the optional contracts your network supports, and add a network entry naming the
   `youtube.force-ssl` scope. An unaudited Google Cloud project uploads as private only.
 - **Telegram**: ~20 messages a minute per chat. The 50 MB limit covers the whole request (the driver caps
   at 45 MB). Nested Bot API objects must be JSON-encoded. `show_caption_above_media` must match on every
-  album item. A bot deletes its own messages only within 48 hours.
+  album item. A bot deletes its own messages only within 48 hours, but edits them at any age:
+  `replaceMedia()` swaps the file through `editMessageMedia` and sends the caption again, which Telegram
+  otherwise clears.
 
 ## License
 

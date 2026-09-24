@@ -3,6 +3,17 @@
 Semantic Versioning. Below `1.0.0` a breaking change lands in a new minor, so pin with `^0.6` and read
 this file before moving between minors.
 
+## 0.7.0 — 2026-09-24
+
+### Added
+
+- `Contracts\SupportsMediaReplacement`: `replaceMedia()` gives a published object a new file in place,
+  keeping its link, views and reactions, and sends the caption again. It answers `Enums\MediaReplacement`:
+  `Replaced`, `Missing` (the network confirmed the object is gone, so a fresh post cannot double it) or
+  `Failed`. `TelegramDriver` implements it over
+  `editMessageMedia`, built as multipart by hand because the SDK's method cannot upload. Instagram cannot
+  (a Reel's video is fixed at creation).
+
 ## 0.6.2 — 2026-09-20
 
 ### Fixed

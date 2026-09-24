@@ -3,8 +3,10 @@
 namespace Hojabbr\Social\Drivers\Telegram;
 
 use Hojabbr\Social\Contracts\SupportsDeletion;
+use Hojabbr\Social\Contracts\SupportsMediaReplacement;
 use Hojabbr\Social\Contracts\SupportsTopics;
 use Hojabbr\Social\Drivers\BaseDriver;
+use Hojabbr\Social\Enums\MediaReplacement;
 use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Capabilities;
@@ -20,6 +22,7 @@ use Spatie\Image\Enums\Fit;
 use Spatie\Image\Enums\ImageDriver;
 use Spatie\Image\Image;
 use Telegram\Bot\Api;
+use Telegram\Bot\Exceptions\TelegramResponseException;
 use Telegram\Bot\FileUpload\InputFile;
 use Throwable;
 
@@ -39,7 +42,7 @@ use Throwable;
  * reachable directly from anywhere we run, and sending it through an exit chosen
  * for geoblocked origins only adds a failure mode.
  */
-class TelegramDriver extends BaseDriver implements SupportsDeletion, SupportsTopics
+class TelegramDriver extends BaseDriver implements SupportsDeletion, SupportsMediaReplacement, SupportsTopics
 {
     /**
      * The Bot API's hard ceiling on a video thumbnail's longest edge. It also
@@ -334,6 +337,103 @@ class TelegramDriver extends BaseDriver implements SupportsDeletion, SupportsTop
             'chat_id' => $account->id,
             'message_id' => (int) $externalId,
         ]));
+    }
+
+    // -----------------------------------------------------------------
+    // Media replacement
+    // -----------------------------------------------------------------
+
+    /**
+     * Swap the photo or video inside one of our own messages, uploading the new
+     * file, with the caption sent again because editMessageMedia clears a
+     * caption the new InputMedia omits.
+     *
+     * Built as multipart by hand: the SDK's editMessageMedia() posts form
+     * fields, which cannot carry a file, and its uploadFile() is protected. The
+     * shape is the album's: `media` is a JSON InputMedia whose file fields point
+     * at `attach://<part>`, and each part is a sibling in the same request. A
+     * bot may edit its own messages at any age; the 48-hour window is
+     * deletion's, not editing's. A message deleted by hand answers «message to
+     * edit not found», which is the one refusal reported as `Missing`.
+     */
+    public function replaceMedia(Account $account, int|string $externalId, PublishRequest $request): MediaReplacement
+    {
+        $media = $request->firstMedia();
+
+        if (! $account->isConfigured() || $this->token() === '' || $media?->path === null || ! is_file($media->path)) {
+            return MediaReplacement::Failed;
+        }
+
+        if (($refusal = $this->unacceptableMedia($request)) !== null) {
+            Log::warning('Telegram: refused a media replacement.', ['message' => $externalId, 'reason' => $refusal]);
+
+            return MediaReplacement::Failed;
+        }
+
+        $video = $media->isVideo();
+        $geometry = $video ? self::probe($media->path) : [];
+        $thumbnail = $video ? self::thumbnailWithinSpec($media->thumbnailPath) : null;
+
+        $input = array_filter([
+            'type' => $video ? 'video' : 'photo',
+            'media' => 'attach://upload',
+            'thumbnail' => $thumbnail !== null ? 'attach://cover' : null,
+            'caption' => $request->body !== '' ? $request->body : null,
+            'parse_mode' => $request->body !== '' ? 'HTML' : null,
+            'show_caption_above_media' => $request->bodyAbove ? true : null,
+            'width' => $geometry['width'] ?? null,
+            'height' => $geometry['height'] ?? null,
+            'duration' => $geometry['duration'] ?? null,
+            'supports_streaming' => $video ? true : null,
+        ], static fn (mixed $value): bool => $value !== null);
+
+        $parts = [
+            ['name' => 'chat_id', 'contents' => (string) $account->id],
+            ['name' => 'message_id', 'contents' => (string) (int) $externalId],
+            ['name' => 'media', 'contents' => json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)],
+            self::filePart('upload', $media->path),
+        ];
+
+        if ($thumbnail !== null) {
+            $parts[] = self::filePart('cover', $thumbnail);
+        }
+
+        try {
+            $this->api()->invoke(fn (Api $api) => $api->post('editMessageMedia', $parts, true));
+
+            return MediaReplacement::Replaced;
+        } catch (TelegramResponseException $exception) {
+            $description = mb_strtolower($exception->getMessage());
+
+            // Telegram's own words for a message that is no longer in the chat.
+            if (str_contains($description, 'message to edit not found') || str_contains($description, 'message_id_invalid')) {
+                return MediaReplacement::Missing;
+            }
+
+            Log::warning('Telegram refused a media replacement.', ['message' => $externalId, 'error' => $this->api()->describe($exception)]);
+
+            return MediaReplacement::Failed;
+        } catch (Throwable $exception) {
+            Log::warning('Telegram media replacement did not complete.', ['message' => $externalId, 'error' => $exception->getMessage()]);
+
+            return MediaReplacement::Failed;
+        } finally {
+            if ($thumbnail !== null) {
+                @unlink($thumbnail);
+            }
+        }
+    }
+
+    /**
+     * One multipart file part, read the way the SDK reads its own uploads.
+     *
+     * @return array{name: string, contents: mixed, filename: string}
+     */
+    private static function filePart(string $name, string $path): array
+    {
+        $file = InputFile::create($path, basename($path));
+
+        return ['name' => $name, 'contents' => $file->getContents(), 'filename' => $file->getFilename()];
     }
 
     // -----------------------------------------------------------------
