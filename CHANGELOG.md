@@ -3,6 +3,13 @@
 Semantic Versioning. Below `1.0.0` a breaking change lands in a new minor, so pin with `^0.6` and read
 this file before moving between minors.
 
+## 0.7.2 — 2026-09-30
+
+### Fixed
+
+- Media insight errors omit transport exception details and redact the account token from provider
+  refusal text before consumers store or expose the diagnostic.
+
 ## 0.7.1 — 2026-09-30
 
 ### Fixed

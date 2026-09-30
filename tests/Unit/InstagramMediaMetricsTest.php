@@ -86,6 +86,22 @@ it('reports transport failures without throwing or inventing a zero', function (
         ->and($metrics->error)->toContain('did not complete');
 });
 
+it('keeps account credentials out of persisted media insight errors', function (bool $transport) {
+    Http::fake(['*/insights*' => $transport
+        ? Http::failedConnection('Connection failed with Authorization: Bearer IGAA-token')
+        : Http::response(['error' => ['code' => 190, 'message' => 'Invalid access token IGAA-token']], 400)]);
+
+    $driver = metricsDriver();
+    $metrics = $driver->mediaMetrics($driver->account('fa'), '17900000000000001');
+
+    expect($metrics->values)->toBe([])
+        ->and($metrics->error)->not->toContain('IGAA-token');
+
+    if (! $transport) {
+        expect($metrics->error)->toContain('190', 'Invalid access token');
+    }
+})->with(['transport' => true, 'provider refusal' => false]);
+
 it('reports a missing token without making a request', function () {
     Http::preventStrayRequests();
     $driver = new InstagramDriver(

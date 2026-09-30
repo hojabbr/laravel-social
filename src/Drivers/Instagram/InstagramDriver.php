@@ -443,12 +443,12 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
 
         try {
             $response = $this->client()->get((string) $externalId.'/insights', ['metric' => implode(',', $metrics)], $account->token);
-        } catch (ConnectionException $unreachable) {
-            return Metrics::unavailable($this->network, 'The Instagram media insights request did not complete: '.$unreachable->getMessage());
+        } catch (ConnectionException) {
+            return Metrics::unavailable($this->network, 'The Instagram media insights request did not complete.');
         }
 
         if (! $response->successful()) {
-            return Metrics::unavailable($this->network, InstagramClient::errorOf($response));
+            return Metrics::unavailable($this->network, str_replace($account->token, '[redacted]', InstagramClient::errorOf($response)));
         }
 
         $data = $response->json();
