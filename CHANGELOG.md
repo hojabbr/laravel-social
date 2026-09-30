@@ -3,6 +3,14 @@
 Semantic Versioning. Below `1.0.0` a breaking change lands in a new minor, so pin with `^0.6` and read
 this file before moving between minors.
 
+## 0.7.1 — 2026-09-30
+
+### Fixed
+
+- Instagram media insights preserve network refusals, missing credentials, transport failures and malformed
+  responses in `Metrics.error`. Inaccessible posts no longer look like successful empty measurements;
+  numeric zero readings remain valid.
+
 ## 0.7.0 — 2026-09-24
 
 ### Added

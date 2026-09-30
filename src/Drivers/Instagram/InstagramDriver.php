@@ -437,7 +437,25 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
             default => ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'ig_reels_avg_watch_time'],
         };
 
-        $data = $this->read($account, (string) $externalId.'/insights', ['metric' => implode(',', $metrics)]);
+        if ($account->token === null) {
+            return Metrics::unavailable($this->network, 'The Instagram account has no token, so its media insights cannot be read.');
+        }
+
+        try {
+            $response = $this->client()->get((string) $externalId.'/insights', ['metric' => implode(',', $metrics)], $account->token);
+        } catch (ConnectionException $unreachable) {
+            return Metrics::unavailable($this->network, 'The Instagram media insights request did not complete: '.$unreachable->getMessage());
+        }
+
+        if (! $response->successful()) {
+            return Metrics::unavailable($this->network, InstagramClient::errorOf($response));
+        }
+
+        $data = $response->json();
+
+        if (! is_array($data) || ! is_array($data['data'] ?? null)) {
+            return Metrics::unavailable($this->network, 'Instagram returned no media insights data.');
+        }
 
         return new Metrics($this->network, $this->flattenInsights($data), label: (string) $externalId);
     }

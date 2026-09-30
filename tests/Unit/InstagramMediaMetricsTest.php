@@ -61,3 +61,56 @@ it('keeps the reel vocabulary when the caller does not say', function () {
     // placements yet reads exactly what it read before.
     expect(askedMetrics(null))->toContain('ig_reels_avg_watch_time');
 });
+
+it('preserves a refused insight read instead of returning a successful empty measurement', function () {
+    Http::fake(['*/insights*' => Http::response(['error' => [
+        'message' => 'Unsupported get request. Object cannot be loaded.',
+        'code' => 100,
+        'error_subcode' => 33,
+    ]], 400)]);
+
+    $driver = metricsDriver();
+    $metrics = $driver->mediaMetrics($driver->account('fa'), '17900000000000001', Placement::Reel);
+
+    expect($metrics->values)->toBe([])
+        ->and($metrics->error)->toContain('100/33', 'Object cannot be loaded');
+});
+
+it('reports transport failures without throwing or inventing a zero', function () {
+    Http::fake(['*/insights*' => Http::failedConnection()]);
+
+    $driver = metricsDriver();
+    $metrics = $driver->mediaMetrics($driver->account('fa'), '17900000000000001');
+
+    expect($metrics->values)->toBe([])
+        ->and($metrics->error)->toContain('did not complete');
+});
+
+it('reports a missing token without making a request', function () {
+    Http::preventStrayRequests();
+    $driver = new InstagramDriver(
+        ['api_base' => 'https://graph.instagram.com/v23.0'],
+        ['fa' => ['id' => '17841400000000001']],
+        'instagram',
+    );
+
+    $metrics = $driver->mediaMetrics($driver->account('fa'), '17900000000000001');
+
+    expect($metrics->values)->toBe([])
+        ->and($metrics->error)->toContain('no token');
+    Http::assertNothingSent();
+});
+
+it('distinguishes malformed, empty and real zero readings', function (mixed $body, ?string $error, array $values) {
+    Http::fake(['*/insights*' => Http::response($body)]);
+
+    $driver = metricsDriver();
+    $metrics = $driver->mediaMetrics($driver->account('fa'), '17900000000000001');
+
+    expect($metrics->error)->toBe($error)
+        ->and($metrics->values)->toBe($values);
+})->with([
+    'invalid envelope' => [['unexpected' => true], 'Instagram returned no media insights data.', []],
+    'empty data' => [['data' => []], null, []],
+    'zero views' => [['data' => [['name' => 'views', 'values' => [['value' => 0]]]]], null, ['views' => 0]],
+]);
