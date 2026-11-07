@@ -3,6 +3,15 @@
 Semantic Versioning. Below `1.0.0` a breaking change lands in a new minor, so pin with `^0.6` and read
 this file before moving between minors.
 
+## 0.7.3 — 2026-11-07
+
+### Fixed
+
+- A Telegram send that never reached Telegram is `Rejected`, not `Unknown`: a pre-send cURL error
+  (proxy or host resolution, connect, a connect timeout, the TLS handshake) with no request bytes
+  written means nothing was sent, so the caller may release its claim and retry. A failure after any
+  request bytes were written, or one with no transport context, stays `Unknown`.
+
 ## 0.7.2 — 2026-09-30
 
 ### Fixed

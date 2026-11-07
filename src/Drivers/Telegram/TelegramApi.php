@@ -2,6 +2,8 @@
 
 namespace Hojabbr\Social\Drivers\Telegram;
 
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\RequestException;
 use Hojabbr\Social\Exceptions\MissingDependency;
 use Hojabbr\Social\Values\PublishResult;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +26,10 @@ use Throwable;
  *   TelegramResponseException — Telegram answered and refused. Deterministic:
  *                               no message exists, so a claim may be released.
  *   TelegramSDKException      — no response at all (a dropped connection). The
- *                               message MAY be live, so the claim is KEPT.
+ *                               message MAY be live, so the claim is KEPT,
+ *                               unless the request provably never left: a
+ *                               connection that was never opened sent nothing
+ *                               (see neverSent()), so that is a rejection.
  *
  * Nothing here throws for a send; every send returns a PublishResult.
  */
@@ -35,6 +40,15 @@ class TelegramApi
 
     /** Added to retry_after so a clock skew cannot make the retry premature. */
     private const FLOOD_JITTER_SECONDS = 1;
+
+    /**
+     * The cURL errors that can stop a request before a byte of it is written:
+     * 5 COULDNT_RESOLVE_PROXY, 6 COULDNT_RESOLVE_HOST, 7 COULDNT_CONNECT,
+     * 28 OPERATION_TIMEDOUT (a connect timeout among them) and 35
+     * SSL_CONNECT_ERROR (the TLS handshake). Each can also strike later, which
+     * is why neverSent() asks for an empty request_size as well.
+     */
+    private const PRE_SEND_ERRORS = [5, 6, 7, 28, 35];
 
     private ?Api $api = null;
 
@@ -71,6 +85,10 @@ class TelegramApi
         } catch (TelegramResponseException $exception) {
             return PublishResult::rejected($this->describe($exception));
         } catch (TelegramSDKException $exception) {
+            if ($this->neverSent($exception)) {
+                return PublishResult::rejected("Telegram was never reached ({$exception->getMessage()}); nothing was sent.");
+            }
+
             // No response ever arrived, so the send may or may not have landed.
             // The caller must keep its claim and ask a human.
             Log::warning('Telegram call outcome unknown.', ['method' => $method, 'error' => $exception->getMessage()]);
@@ -122,6 +140,10 @@ class TelegramApi
         } catch (TelegramResponseException $exception) {
             return PublishResult::rejected($this->describe($exception));
         } catch (TelegramSDKException $exception) {
+            if ($this->neverSent($exception)) {
+                return PublishResult::rejected("Telegram was never reached ({$exception->getMessage()}); no page was sent.");
+            }
+
             Log::warning('Telegram album outcome unknown.', ['error' => $exception->getMessage()]);
 
             return PublishResult::unknown(
@@ -186,6 +208,30 @@ class TelegramApi
                 $attempt++;
             }
         }
+    }
+
+    /**
+     * Whether a call that got no response provably never sent its request.
+     *
+     * cURL reports in `request_size` the bytes of request it wrote; Guzzle hands
+     * them over in the exception's handler context. A pre-send error with none
+     * written means Telegram cannot have seen the message, so the claim may be
+     * released and the post offered again. Anything else (bytes written, an
+     * error that comes after the send, a transport that reports no context)
+     * stays unknown: a message may already be live.
+     */
+    private function neverSent(TelegramSDKException $exception): bool
+    {
+        $transport = $exception->getPrevious();
+
+        if (! $transport instanceof ConnectException && ! $transport instanceof RequestException) {
+            return false;
+        }
+
+        $context = $transport->getHandlerContext();
+
+        return in_array($context['errno'] ?? null, self::PRE_SEND_ERRORS, true)
+            && ($context['request_size'] ?? null) === 0;
     }
 
     /**
