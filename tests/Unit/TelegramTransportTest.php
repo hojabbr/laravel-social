@@ -68,3 +68,30 @@ test('a failure with no transport context stays unknown', function (): void {
     expect(failingTelegram($failure)->send('sendMessage', ['chat_id' => -100, 'text' => 'hi'])->outcome)
         ->toBe(Outcome::Unknown);
 });
+
+test('a transport failure never carries the bot token into the result', function (int $errno, int $sent, Outcome $outcome): void {
+    $failure = curlFailure(
+        "cURL error {$errno}: Connection failed (see https://curl.se/libcurl/c/libcurl-errors.html) for https://api.telegram.org/bot123:token/sendMessage",
+        ['errno' => $errno, 'request_size' => $sent],
+    );
+
+    $message = failingTelegram($failure)->send('sendMessage', ['chat_id' => -100, 'text' => 'hi']);
+    $album = failingTelegram($failure)->sendAlbum(['chat_id' => -100, 'media' => []]);
+
+    expect($message->outcome)->toBe($outcome)
+        ->and($message->error)->not->toContain('123:token')
+        ->and($message->error)->toContain('/bot[redacted]/sendMessage')
+        ->and($album->error)->not->toContain('123:token');
+})->with([
+    'never sent' => [28, 0, Outcome::Rejected],
+    'outcome unknown' => [56, 412, Outcome::Unknown],
+]);
+
+test('redaction also takes out a token this transport did not send, encoded or not', function (): void {
+    $api = new TelegramApi('123:token');
+
+    expect($api->redact('for https://api.telegram.org/bot8909915391:AAF_x-Y9/sendMessage'))
+        ->toBe('for https://api.telegram.org/bot[redacted]/sendMessage')
+        ->and($api->redact('path /bot123%3Atoken/getMe'))->toBe('path /bot[redacted]/getMe')
+        ->and($api->redact('token 123:token in a body'))->toBe('token [redacted] in a body');
+});

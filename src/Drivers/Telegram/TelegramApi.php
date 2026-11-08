@@ -86,15 +86,15 @@ class TelegramApi
             return PublishResult::rejected($this->describe($exception));
         } catch (TelegramSDKException $exception) {
             if ($this->neverSent($exception)) {
-                return PublishResult::rejected("Telegram was never reached ({$exception->getMessage()}); nothing was sent.");
+                return PublishResult::rejected("Telegram was never reached ({$this->redact($exception->getMessage())}); nothing was sent.");
             }
 
             // No response ever arrived, so the send may or may not have landed.
             // The caller must keep its claim and ask a human.
-            Log::warning('Telegram call outcome unknown.', ['method' => $method, 'error' => $exception->getMessage()]);
+            Log::warning('Telegram call outcome unknown.', ['method' => $method, 'error' => $this->redact($exception->getMessage())]);
 
             return PublishResult::unknown(
-                "Could not confirm the Telegram post ({$exception->getMessage()}) — a message may already be live in the group; check before re-posting.",
+                "Could not confirm the Telegram post ({$this->redact($exception->getMessage())}) — a message may already be live in the group; check before re-posting.",
             );
         }
     }
@@ -141,13 +141,13 @@ class TelegramApi
             return PublishResult::rejected($this->describe($exception));
         } catch (TelegramSDKException $exception) {
             if ($this->neverSent($exception)) {
-                return PublishResult::rejected("Telegram was never reached ({$exception->getMessage()}); no page was sent.");
+                return PublishResult::rejected("Telegram was never reached ({$this->redact($exception->getMessage())}); no page was sent.");
             }
 
-            Log::warning('Telegram album outcome unknown.', ['error' => $exception->getMessage()]);
+            Log::warning('Telegram album outcome unknown.', ['error' => $this->redact($exception->getMessage())]);
 
             return PublishResult::unknown(
-                "Could not confirm the Telegram album ({$exception->getMessage()}) — some pages may already be live in the group; check before re-posting.",
+                "Could not confirm the Telegram album ({$this->redact($exception->getMessage())}) — some pages may already be live in the group; check before re-posting.",
             );
         }
     }
@@ -170,7 +170,7 @@ class TelegramApi
             Log::warning('Telegram call failed.', [
                 'error' => $exception instanceof TelegramResponseException
                     ? $this->describe($exception)
-                    : $exception->getMessage(),
+                    : $this->redact($exception->getMessage()),
             ]);
 
             return null;
@@ -283,7 +283,7 @@ class TelegramApi
      */
     public function describe(TelegramResponseException $exception): string
     {
-        $description = $exception->getMessage();
+        $description = $this->redact($exception->getMessage());
         $code = (int) $exception->get('error_code', 0);
 
         return match (true) {
@@ -295,6 +295,24 @@ class TelegramApi
             str_contains($description, 'not enough rights') => 'The bot is missing an admin right for this action (most often Manage Topics).',
             default => "Telegram refused the request (HTTP {$code}): {$description}",
         };
+    }
+
+    /**
+     * A transport message with the bot token taken out.
+     *
+     * The Bot API carries the token in the request path, and cURL and Guzzle
+     * quote the whole URL in their failure messages, so an unredacted message
+     * would put the token into a PublishResult that callers store and show,
+     * and into the log. Every message that leaves this class passes through
+     * here. The pattern catches a token this instance did not send as well.
+     */
+    public function redact(string $message): string
+    {
+        if ($this->token !== '') {
+            $message = str_replace([$this->token, rawurlencode($this->token)], '[redacted]', $message);
+        }
+
+        return (string) preg_replace('~/bot\d+(?::|%3A)[A-Za-z0-9_-]+~i', '/bot[redacted]', $message);
     }
 
     private function api(): Api

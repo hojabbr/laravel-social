@@ -414,7 +414,7 @@ class TelegramDriver extends BaseDriver implements SupportsDeletion, SupportsMed
 
             return MediaReplacement::Failed;
         } catch (Throwable $exception) {
-            Log::warning('Telegram media replacement did not complete.', ['message' => $externalId, 'error' => $exception->getMessage()]);
+            Log::warning('Telegram media replacement did not complete.', ['message' => $externalId, 'error' => $this->api()->redact($exception->getMessage())]);
 
             return MediaReplacement::Failed;
         } finally {
