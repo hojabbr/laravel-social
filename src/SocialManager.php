@@ -8,6 +8,7 @@ use Hojabbr\Social\Drivers\Instagram\InstagramDriver;
 use Hojabbr\Social\Drivers\Telegram\TelegramDriver;
 use Hojabbr\Social\Drivers\YouTube\YouTubeDriver;
 use Hojabbr\Social\Exceptions\UnknownNetwork;
+use Hojabbr\Social\Support\Payload;
 use Illuminate\Contracts\Config\Repository;
 
 /**
@@ -114,7 +115,7 @@ class SocialManager
         /** @var array<string, array<string, mixed>> $accounts */
         $accounts = (array) $this->config->get("social.accounts.{$network}", []);
 
-        $driver = (string) ($settings['driver'] ?? $network);
+        $driver = Payload::string($settings['driver'] ?? null, $network);
 
         if (isset($this->customCreators[$driver])) {
             return ($this->customCreators[$driver])($settings, $accounts, $network);

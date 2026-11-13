@@ -5,5 +5,7 @@
 /.editorconfig    export-ignore
 /.gitignore       export-ignore
 /phpunit.xml      export-ignore
+/phpstan.neon     export-ignore
+/pint.json        export-ignore
 
 * text=auto eol=lf

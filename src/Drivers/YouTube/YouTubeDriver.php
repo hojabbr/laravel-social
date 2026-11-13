@@ -8,6 +8,7 @@ use Hojabbr\Social\Contracts\SupportsCoverUpdate;
 use Hojabbr\Social\Contracts\SupportsDeletion;
 use Hojabbr\Social\Drivers\BaseDriver;
 use Hojabbr\Social\Enums\Placement;
+use Hojabbr\Social\Support\Payload;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Capabilities;
 use Hojabbr\Social\Values\Credentials;
@@ -500,7 +501,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
         }
 
         $statistics = $this->read('videos', ['part' => 'statistics', 'id' => (string) $externalId], $token);
-        $row = is_array($statistics['items'][0]['statistics'] ?? null) ? $statistics['items'][0]['statistics'] : [];
+        $row = Payload::map(Payload::first($statistics['items'] ?? null)['statistics'] ?? null);
 
         $retention = $this->reports([
             'ids' => 'channel==MINE',
@@ -532,8 +533,9 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             'mine' => $account->id !== '' ? null : 'true',
         ]), $token);
 
-        $item = is_array($channel['items'][0] ?? null) ? $channel['items'][0] : [];
-        $statistics = is_array($item['statistics'] ?? null) ? $item['statistics'] : [];
+        $item = Payload::first($channel['items'] ?? null);
+        $statistics = Payload::map($item['statistics'] ?? null);
+        $title = Payload::map($item['snippet'] ?? null)['title'] ?? null;
 
         $reports = $this->reports([
             'ids' => 'channel==MINE',
@@ -547,7 +549,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             'lifetimeViews' => $this->intOf($statistics['viewCount'] ?? null),
             'videos' => $this->intOf($statistics['videoCount'] ?? null),
             ...$reports,
-        ], label: is_string($item['snippet']['title'] ?? null) ? $item['snippet']['title'] : $account->key);
+        ], label: is_string($title) ? $title : $account->key);
     }
 
     /**
@@ -660,17 +662,19 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             'mine' => $account->id !== '' ? null : 'true',
         ]), $token);
 
-        $item = is_array($channel['items'][0] ?? null) ? $channel['items'][0] : [];
+        $item = Payload::first($channel['items'] ?? null);
 
         if ($item === []) {
             return [];
         }
 
+        $snippet = Payload::map($item['snippet'] ?? null);
+
         return [
             'channelId' => is_string($item['id'] ?? null) ? $item['id'] : null,
-            'channelTitle' => is_string($item['snippet']['title'] ?? null) ? $item['snippet']['title'] : null,
-            'handle' => is_string($item['snippet']['customUrl'] ?? null) ? $item['snippet']['customUrl'] : null,
-            'subscribers' => $this->intOf($item['statistics']['subscriberCount'] ?? null),
+            'channelTitle' => is_string($snippet['title'] ?? null) ? $snippet['title'] : null,
+            'handle' => is_string($snippet['customUrl'] ?? null) ? $snippet['customUrl'] : null,
+            'subscribers' => $this->intOf(Payload::map($item['statistics'] ?? null)['subscriberCount'] ?? null),
         ];
     }
 
@@ -724,7 +728,7 @@ class YouTubeDriver extends BaseDriver implements ProvidesAnalytics, RefreshesTo
             return [];
         }
 
-        return $response->successful() && is_array($response->json()) ? $response->json() : [];
+        return $response->successful() ? Payload::map($response->json()) : [];
     }
 
     /**

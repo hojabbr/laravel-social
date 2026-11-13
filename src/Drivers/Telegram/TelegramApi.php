@@ -5,6 +5,7 @@ namespace Hojabbr\Social\Drivers\Telegram;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\RequestException;
 use Hojabbr\Social\Exceptions\MissingDependency;
+use Hojabbr\Social\Support\Payload;
 use Hojabbr\Social\Values\PublishResult;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
@@ -80,7 +81,7 @@ class TelegramApi
 
             return PublishResult::sent(
                 is_numeric($messageId) ? (int) $messageId : null,
-                $this->permalink($message->all()),
+                $this->permalink(Payload::map($message->all())),
             );
         } catch (TelegramResponseException $exception) {
             return PublishResult::rejected($this->describe($exception));
@@ -136,7 +137,7 @@ class TelegramApi
 
             $first = $messages->all()[0] ?? null;
 
-            return PublishResult::sentMany($ids, is_array($first) ? $this->permalink($first) : null);
+            return PublishResult::sentMany($ids, is_array($first) ? $this->permalink(Payload::map($first)) : null);
         } catch (TelegramResponseException $exception) {
             return PublishResult::rejected($this->describe($exception));
         } catch (TelegramSDKException $exception) {
@@ -284,7 +285,7 @@ class TelegramApi
     public function describe(TelegramResponseException $exception): string
     {
         $description = $this->redact($exception->getMessage());
-        $code = (int) $exception->get('error_code', 0);
+        $code = Payload::int($exception->get('error_code', 0));
 
         return match (true) {
             $code === 401 => 'The bot token was rejected — regenerate it with @BotFather and update it in Settings.',

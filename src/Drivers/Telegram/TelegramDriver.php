@@ -8,6 +8,7 @@ use Hojabbr\Social\Contracts\SupportsTopics;
 use Hojabbr\Social\Drivers\BaseDriver;
 use Hojabbr\Social\Enums\MediaReplacement;
 use Hojabbr\Social\Enums\Placement;
+use Hojabbr\Social\Support\Payload;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Capabilities;
 use Hojabbr\Social\Values\Health;
@@ -124,7 +125,7 @@ class TelegramDriver extends BaseDriver implements SupportsDeletion, SupportsMed
 
         $me = $this->me();
         $chat = $this->chat($account);
-        $member = is_array($me) && isset($me['id']) ? $this->member($account, (int) $me['id']) : null;
+        $member = is_array($me) && isset($me['id']) ? $this->member($account, Payload::int($me['id'])) : null;
 
         return new Health($this->network, $this->isEnabled(), true, [
             'username' => $me['username'] ?? null,
@@ -581,22 +582,28 @@ class TelegramDriver extends BaseDriver implements SupportsDeletion, SupportsMed
     /** @return array<string, mixed>|null */
     public function me(): ?array
     {
-        return $this->api()->attempt(fn (Api $api) => $api->getMe())?->toArray();
+        $me = $this->api()->attempt(fn (Api $api) => $api->getMe());
+
+        return $me === null ? null : Payload::map($me->toArray());
     }
 
     /** @return array<string, mixed>|null */
     public function chat(Account $account): ?array
     {
-        return $this->api()->attempt(fn (Api $api) => $api->getChat(['chat_id' => $account->id]))?->toArray();
+        $chat = $this->api()->attempt(fn (Api $api) => $api->getChat(['chat_id' => $account->id]));
+
+        return $chat === null ? null : Payload::map($chat->toArray());
     }
 
     /** @return array<string, mixed>|null */
     public function member(Account $account, int $userId): ?array
     {
-        return $this->api()->attempt(fn (Api $api) => $api->getChatMember([
+        $member = $this->api()->attempt(fn (Api $api) => $api->getChatMember([
             'chat_id' => $account->id,
             'user_id' => $userId,
-        ]))?->toArray();
+        ]));
+
+        return $member === null ? null : Payload::map($member->toArray());
     }
 
     /**

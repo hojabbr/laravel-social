@@ -3,6 +3,21 @@
 Semantic Versioning. Below `1.0.0` a breaking change lands in a new minor, so pin with `^0.6` and read
 this file before moving between minors.
 
+## 0.7.5 — 2026-11-13
+
+### Changed
+
+- CI runs the suite, PHPStan at level `max` and Pint on every push and pull request (`tests.yml`,
+  `phpstan.neon`, `pint.json`, the same as `laravel-cliproxy`'s). A network's decoded JSON and the
+  package's config entries are read through one typed reader (`Support\Payload`), so a shape a network
+  did not promise becomes an empty value of its type rather than a cast of `mixed`.
+
+## 0.7.4 — 2026-11-08
+
+### Fixed
+
+- The Telegram bot token is redacted from every transport message a send can report.
+
 ## 0.7.3 — 2026-11-07
 
 ### Fixed

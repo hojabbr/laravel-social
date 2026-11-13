@@ -5,6 +5,7 @@ namespace Hojabbr\Social\Drivers;
 use Hojabbr\Social\Contracts\Driver;
 use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\Exceptions\MissingCredentials;
+use Hojabbr\Social\Support\Payload;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Destination;
 use Hojabbr\Social\Values\PublishRequest;
@@ -64,10 +65,10 @@ abstract class BaseDriver implements Driver
         return new Account(
             network: $this->network,
             key: $key,
-            id: trim((string) ($account['id'] ?? '')),
-            handle: ($handle = trim((string) ($account['handle'] ?? ''))) === '' ? null : $handle,
-            token: ($token = trim((string) ($account['token'] ?? ''))) === '' ? null : $token,
-            refreshToken: ($refresh = trim((string) ($account['refresh_token'] ?? ''))) === '' ? null : $refresh,
+            id: trim(Payload::string($account['id'] ?? null)),
+            handle: ($handle = trim(Payload::string($account['handle'] ?? null))) === '' ? null : $handle,
+            token: ($token = trim(Payload::string($account['token'] ?? null))) === '' ? null : $token,
+            refreshToken: ($refresh = trim(Payload::string($account['refresh_token'] ?? null))) === '' ? null : $refresh,
         );
     }
 

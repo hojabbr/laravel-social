@@ -2,6 +2,7 @@
 
 namespace Hojabbr\Social\Drivers\Instagram;
 
+use Hojabbr\Social\Support\Payload;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -126,8 +127,9 @@ class InstagramClient
             return false;
         }
 
-        return (int) ($error['code'] ?? 0) === 368
-            || ((int) ($error['code'] ?? 0) === 9 && ($error['type'] ?? null) === 'OAuthException');
+        $code = Payload::int($error['code'] ?? null);
+
+        return $code === 368 || ($code === 9 && ($error['type'] ?? null) === 'OAuthException');
     }
 
     private function url(string $path): string

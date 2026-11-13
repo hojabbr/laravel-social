@@ -7,6 +7,7 @@ use Hojabbr\Social\Contracts\RefreshesTokens;
 use Hojabbr\Social\Contracts\SupportsComments;
 use Hojabbr\Social\Drivers\BaseDriver;
 use Hojabbr\Social\Enums\Placement;
+use Hojabbr\Social\Support\Payload;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Capabilities;
 use Hojabbr\Social\Values\Credentials;
@@ -16,6 +17,7 @@ use Hojabbr\Social\Values\PublishRequest;
 use Hojabbr\Social\Values\PublishResult;
 use Hojabbr\Social\Values\RateProfile;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Sleep;
 
@@ -318,7 +320,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
                 return PublishResult::rejected(InstagramClient::errorOf($response));
             }
 
-            $status = strtoupper((string) $response->json('status_code'));
+            $status = strtoupper(Payload::string($response->json('status_code')));
 
             if ($status === 'FINISHED' || $status === 'PUBLISHED') {
                 return PublishResult::sent($containerId);
@@ -457,7 +459,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
             return Metrics::unavailable($this->network, 'Instagram returned no media insights data.');
         }
 
-        return new Metrics($this->network, $this->flattenInsights($data), label: (string) $externalId);
+        return new Metrics($this->network, $this->flattenInsights(Payload::map($data)), label: (string) $externalId);
     }
 
     public function accountMetrics(Account $account): Metrics
@@ -490,7 +492,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
             'fields' => 'config,quota_usage',
         ]);
 
-        $row = is_array($data['data'][0] ?? null) ? $data['data'][0] : $data;
+        $row = Payload::first($data['data'] ?? null) ?: $data;
         $config = is_array($row['config'] ?? null) ? $row['config'] : [];
 
         return new Metrics($this->network, [
@@ -607,7 +609,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
             return [];
         }
 
-        return $response->successful() && is_array($response->json()) ? $response->json() : [];
+        return $response->successful() ? Payload::map($response->json()) : [];
     }
 
     /**
@@ -630,7 +632,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
 
             $value = is_array($row['total_value'] ?? null)
                 ? ($row['total_value']['value'] ?? null)
-                : ($row['values'][0]['value'] ?? null);
+                : (Payload::first($row['values'] ?? null)['value'] ?? null);
 
             $values[$row['name']] = is_numeric($value) ? $value + 0 : null;
         }
@@ -728,7 +730,7 @@ class InstagramDriver extends BaseDriver implements ProvidesAnalytics, Refreshes
      * The shared shape of the two boolean comment writes: no token is false, an
      * unreachable host is false, and a 200 without `success: true` is false.
      *
-     * @param  callable(string): \Illuminate\Http\Client\Response  $call
+     * @param  callable(string): Response  $call
      */
     private function commentWrite(Account $account, callable $call): bool
     {

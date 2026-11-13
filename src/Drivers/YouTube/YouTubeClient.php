@@ -3,6 +3,7 @@
 namespace Hojabbr\Social\Drivers\YouTube;
 
 use GuzzleHttp\Psr7\Utils;
+use Hojabbr\Social\Support\Payload;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -332,7 +333,7 @@ class YouTubeClient
             return 'YouTube returned HTTP '.$response->status().' with no error detail.';
         }
 
-        $reason = $error['errors'][0]['reason'] ?? null;
+        $reason = Payload::first($error['errors'] ?? null)['reason'] ?? null;
         $message = $error['message'] ?? 'the request was refused';
 
         return sprintf(

@@ -2,6 +2,8 @@
 
 namespace Hojabbr\Social\Values;
 
+use Hojabbr\Social\Support\Payload;
+
 /**
  * A flat bag of numbers read back from a network, and deliberately nothing more.
  *
@@ -59,7 +61,7 @@ final readonly class Metrics
         $values = is_array($data['values'] ?? null) ? $data['values'] : [];
 
         return new self(
-            network: (string) ($data['network'] ?? ''),
+            network: Payload::string($data['network'] ?? null),
             values: $values,
             label: is_string($data['label'] ?? null) ? $data['label'] : null,
             error: is_string($data['error'] ?? null) ? $data['error'] : null,

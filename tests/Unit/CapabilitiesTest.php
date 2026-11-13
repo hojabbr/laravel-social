@@ -1,5 +1,7 @@
 <?php
 
+use Hojabbr\Social\Drivers\Instagram\InstagramDriver;
+use Hojabbr\Social\Drivers\YouTube\YouTubeDriver;
 use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\Values\Capabilities;
 
@@ -36,7 +38,7 @@ test('a thumbnail slot with no fixed shape declares null, not a guess', function
 });
 
 test('YouTube declares the 16:9 slot it silently pads a portrait cover into', function (): void {
-    $youtube = new Hojabbr\Social\Drivers\YouTube\YouTubeDriver([], [], 'youtube');
+    $youtube = new YouTubeDriver([], [], 'youtube');
 
     expect($youtube->capabilities()->thumbnailAspect)->toBe(16 / 9);
 });
@@ -45,7 +47,7 @@ test('a network that fetches the file declares no thumbnail shape', function ():
     // Instagram renders a Reel cover in the Reel's own 9:16 container, so there
     // is nothing to declare — and declaring one would make the caller convert an
     // asset that was already the right shape.
-    $instagram = new Hojabbr\Social\Drivers\Instagram\InstagramDriver([], [], 'instagram');
+    $instagram = new InstagramDriver([], [], 'instagram');
 
     expect($instagram->capabilities()->thumbnailAspect)->toBeNull()
         ->and($instagram->capabilities()->pullsMedia)->toBeTrue();

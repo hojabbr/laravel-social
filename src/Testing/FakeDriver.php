@@ -5,6 +5,7 @@ namespace Hojabbr\Social\Testing;
 use Hojabbr\Social\Contracts\Driver;
 use Hojabbr\Social\Enums\Placement;
 use Hojabbr\Social\SocialManager;
+use Hojabbr\Social\Support\Payload;
 use Hojabbr\Social\Values\Account;
 use Hojabbr\Social\Values\Capabilities;
 use Hojabbr\Social\Values\Destination;
@@ -55,7 +56,7 @@ final class FakeDriver implements Driver
     public static function fake(string $network, string $queue = 'default'): self
     {
         $manager = app(SocialManager::class);
-        $driver = (string) config("social.networks.{$network}.driver", $network);
+        $driver = Payload::string(config("social.networks.{$network}.driver"), $network);
 
         $fake = new self($network, $queue);
 

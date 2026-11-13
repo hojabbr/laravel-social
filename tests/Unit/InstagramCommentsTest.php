@@ -1,5 +1,6 @@
 <?php
 
+use GuzzleHttp\Psr7\Response;
 use Hojabbr\Social\Contracts\SupportsComments;
 use Hojabbr\Social\Contracts\SupportsDeletion;
 use Hojabbr\Social\Drivers\Instagram\InstagramClient;
@@ -180,6 +181,6 @@ it('answers an empty array when the media read fails', function () {
 
 it('answers isSpamBlock false for a response with no error object', function () {
     expect(InstagramClient::isSpamBlock(new Illuminate\Http\Client\Response(
-        new GuzzleHttp\Psr7\Response(200, [], '{"success":true}'),
+        new Response(200, [], '{"success":true}'),
     )))->toBeFalse();
 });
